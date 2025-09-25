@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -22,7 +23,7 @@ const diseases = [
   {
     title: "Rust",
     description: "Fungal disease causing orange-brown pustules on leaves.",
-    // image: require("../../assets/fonts/images/rust.jpg"),
+    image: require("../assets/fonts/images/rust.jpg"),
     page: "/details/rust",
     tag: "Fungal",
     tip: "Remove infected leaves early!",
@@ -45,6 +46,11 @@ const diseases = [
   },
 ];
 
+const user = {
+  name: "Leonardo", 
+  
+};
+
 export default function Index() {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -63,7 +69,7 @@ export default function Index() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.welcomeText}>Welcome back,</Text>
-          <Text style={styles.userText}>User!</Text>
+          <Text style={styles.userText}>{user.name}</Text>
         </View>
 
         {/* Logo / Illustration */}
@@ -80,13 +86,29 @@ export default function Index() {
             style={[styles.quickButton, { backgroundColor: Green }]}
             onPress={() => router.push("/scan")}
           >
-            <Text style={styles.quickButtonText}>📷 Scan Leaf</Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons
+                name="camera"
+                size={26}
+                color="#fff"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.quickButtonText}>Scan Leaf</Text>
+            </View>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.quickButton, { backgroundColor: DarkGreen }]}
             onPress={() => router.push("/details/disease")}
           >
-            <Text style={styles.quickButtonText}>🗂 All Diseases</Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons
+                name="albums"
+                size={26}
+                color="#fff"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.quickButtonText}>All Diseases</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -96,11 +118,17 @@ export default function Index() {
           data={filteredDiseases}
           horizontal
           keyExtractor={(item, index) => index.toString()}
-          contentContainerStyle={[styles.cardsContainer, { overflow: "visible", paddingBottom: 30 }]}
+          contentContainerStyle={[
+            styles.cardsContainer,
+            { overflow: "visible", paddingBottom: 30 },
+          ]}
           showsHorizontalScrollIndicator={false}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={[styles.card, { width: CARD_WIDTH, overflow: "visible", marginBottom: 16 }]}
+              style={[
+                styles.card,
+                { width: CARD_WIDTH, overflow: "visible", marginBottom: 16 },
+              ]}
               activeOpacity={0.85}
               onPress={() => router.push(item.page)}
             >
