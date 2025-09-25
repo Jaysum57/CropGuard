@@ -24,22 +24,33 @@ function ScanScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setPhotoUri(asset.uri);
-        // Get image as blob
-        const fileBlob = await fetch(asset.uri).then((r) => r.blob());
+        // Create FormData with proper file structure for Android
         const formData = new FormData();
-        formData.append("file", fileBlob, "photo.jpg");
+        formData.append("file", {
+          uri: asset.uri,
+          type: "image/jpeg",
+          name: "photo.jpg",
+        } as any);
         const apiUrl = "https://jaysum-cropguardfastapi.hf.space/predict";
         const response = await fetch(apiUrl, {
           method: "POST",
           body: formData,
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const resultJson = await response.json();
         setResult(resultJson.predictions ?? resultJson);
         setModalVisible(true);
       }
     } catch (err) {
-      let errorMsg = "Unknown error";
-      if (err instanceof Error) errorMsg = err.message;
+      let errorMsg = "Network request failed";
+      if (err instanceof Error) {
+        errorMsg = `${err.name}: ${err.message}`;
+        console.error("Image picker prediction error:", err);
+      }
       setResult({ error: errorMsg });
       setModalVisible(true);
     }
@@ -55,6 +66,41 @@ function ScanScreen() {
 
   const cameraRef = useRef<any>(null);
 
+  const testAPI = async () => {
+    setLoading(true);
+    try {
+      const apiUrl = "https://jaysum-cropguardfastapi.hf.space/";
+      console.log("Testing API connection to:", apiUrl);
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      console.log("Response status:", response.status);
+      console.log("Response OK:", response.ok);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const resultJson = await response.json();
+      console.log("API Response:", resultJson);
+      setResult({ success: "API connection successful", data: resultJson });
+      setModalVisible(true);
+    } catch (err) {
+      console.error("API test error:", err);
+      let errorMsg = "API test failed";
+      if (err instanceof Error) {
+        errorMsg = `${err.name}: ${err.message}`;
+      }
+      setResult({ error: errorMsg });
+      setModalVisible(true);
+    }
+    setLoading(false);
+  };
+
   const handleStartCamera = () => {
     setCameraOpen(true);
   };
@@ -67,12 +113,13 @@ function ScanScreen() {
         setPhotoUri(photo.uri);
         setCameraOpen(false);
 
-        // Get image as blob
-        const fileBlob = await fetch(photo.uri).then((r) => r.blob());
-
-        // Prepare form data for FastAPI
+        // Prepare form data for FastAPI - Android compatible format
         const formData = new FormData();
-        formData.append("file", fileBlob, "photo.jpg");
+        formData.append("file", {
+          uri: photo.uri,
+          type: "image/jpeg",
+          name: "photo.jpg",
+        } as any);
 
         // FastAPI endpoint for prediction
         const apiUrl = "https://jaysum-cropguardfastapi.hf.space/predict";
@@ -80,12 +127,20 @@ function ScanScreen() {
           method: "POST",
           body: formData,
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const resultJson = await response.json();
         setResult(resultJson.predictions ?? resultJson);
         setModalVisible(true);
       } catch (err) {
-        let errorMsg = "Unknown error";
-        if (err instanceof Error) errorMsg = err.message;
+        let errorMsg = "Network request failed";
+        if (err instanceof Error) {
+          errorMsg = `${err.name}: ${err.message}`;
+          console.error("Camera prediction error:", err);
+        }
         setResult({ error: errorMsg });
         setModalVisible(true);
       }
@@ -133,9 +188,16 @@ function ScanScreen() {
       <TouchableOpacity style={styles.button} onPress={handlePickImage}>
         <View style={styles.buttonContent}>
           <Ionicons name="image" size={26} color="#fff" style={styles.iconLeft} />
-          <Text style={styles.buttonText}>Open Gallery test</Text>
+          <Text style={styles.buttonText}>Open Gallery</Text>
         </View>
       </TouchableOpacity>
+      {/* Test API Connection */}
+      {/* <TouchableOpacity style={styles.button} onPress={testAPI}>
+        <View style={styles.buttonContent}>
+          <Ionicons name="wifi" size={26} color="#fff" style={styles.iconLeft} />
+          <Text style={styles.buttonText}>Test API Connection</Text>
+        </View>
+      </TouchableOpacity> */}
       {/* Tip */}
       <View style={styles.tipContainer}>
         <Ionicons name="bulb-sharp" size={18} color={Green} style={styles.tipIcon} />
