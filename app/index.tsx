@@ -19,7 +19,16 @@ const Green = "#30BE63";
 const OffWhite = "#F6F6F6";
 const DarkGreen = "#0E312F";
 
-const diseases = [
+type Disease = {
+  title: string;
+  description: string;
+  image?: any;
+  page: string;
+  tag: string;
+  tip: string;
+};
+
+const diseases: Disease[] = [
   {
     title: "Rust",
     description: "Fungal disease causing orange-brown pustules on leaves.",

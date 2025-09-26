@@ -5,7 +5,7 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 const Green = '#30BE63';
 const OffWhite = '#F6F6F6';
-const DarkGreen = '#021A1A';
+const DarkGreen = '#021a09ff';
 
 const _layout = () => {
   const router = useRouter();
@@ -34,10 +34,13 @@ const _layout = () => {
   );
 };
 
-const CustomTabBar = ({ state, descriptors, navigation }) => {
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { Route } from '@react-navigation/native';
+
+const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
   return (
     <View style={styles.tabBarContainer}>
-      {state.routes.map((route, index) => {
+      {state.routes.map((route: Route<string>, index: number) => {
         const { options } = descriptors[route.key];
         const label = options.title;
         const isFocused = state.index === index;
@@ -55,7 +58,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
         };
 
         // Define icons
-        let iconName;
+        let iconName: keyof typeof Ionicons.glyphMap = 'home-outline';
         if (label === 'Home') iconName = 'home-outline';
         else if (label === 'Scan') iconName = 'scan-outline';
         else if (label === 'Account') iconName = 'person-outline';
@@ -82,7 +85,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             accessibilityRole="button"
             accessibilityState={isFocused ? { selected: true } : {}}
             accessibilityLabel={options.tabBarAccessibilityLabel}
-            testID={options.tabBarTestID}
           >
             <Ionicons
               name={iconName}
