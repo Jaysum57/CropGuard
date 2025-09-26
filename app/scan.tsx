@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraType, CameraView, useCameraPermissions } from "expo-camera";
+import { CameraType, CameraView, FlashMode, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import React, { useRef, useState } from "react";
 import {
@@ -36,6 +36,10 @@ function ScanScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         setPhotoUri(asset.uri);
+        
+        // Show processing modal before API call
+        setProcessingVisible(true);
+        
         // Create FormData with proper file structure for Android
         const formData = new FormData();
         formData.append("file", {
@@ -55,7 +59,12 @@ function ScanScreen() {
         
         const resultJson = await response.json();
         setResult(resultJson);
-        setModalVisible(true);
+        
+        // Hide processing modal and show results with small delay
+        setProcessingVisible(false);
+        setTimeout(() => {
+          setModalVisible(true);
+        }, 300);
       }
     } catch (err) {
       let errorMsg = "Network request failed";
@@ -64,15 +73,22 @@ function ScanScreen() {
         console.error("Image picker prediction error:", err);
       }
       setResult({ error: errorMsg });
-      setModalVisible(true);
+      
+      // Hide processing modal and show error with small delay
+      setProcessingVisible(false);
+      setTimeout(() => {
+        setModalVisible(true);
+      }, 300);
     }
     setLoading(false);
   };
   const [cameraOpen, setCameraOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [processingVisible, setProcessingVisible] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [facing, setFacing] = useState<CameraType>('back');
+  const [flash, setFlash] = useState<FlashMode>('off');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -125,6 +141,9 @@ function ScanScreen() {
         setPhotoUri(photo.uri);
         setCameraOpen(false);
 
+        // Show processing modal before API call
+        setProcessingVisible(true);
+
         // Prepare form data for FastAPI - Android compatible format
         const formData = new FormData();
         formData.append("file", {
@@ -146,7 +165,12 @@ function ScanScreen() {
         
         const resultJson = await response.json();
         setResult(resultJson);
-        setModalVisible(true);
+        
+        // Hide processing modal and show results with small delay
+        setProcessingVisible(false);
+        setTimeout(() => {
+          setModalVisible(true);
+        }, 300);
       } catch (err) {
         let errorMsg = "Network request failed";
         if (err instanceof Error) {
@@ -154,7 +178,12 @@ function ScanScreen() {
           console.error("Camera prediction error:", err);
         }
         setResult({ error: errorMsg });
-        setModalVisible(true);
+        
+        // Hide processing modal and show error with small delay
+        setProcessingVisible(false);
+        setTimeout(() => {
+          setModalVisible(true);
+        }, 300);
       }
       setLoading(false);
     }
@@ -162,6 +191,14 @@ function ScanScreen() {
 
   function toggleCameraFacing() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
+  }
+
+  function toggleFlash() {
+    setFlash(current => (current === 'off' ? 'on' : 'off'));
+  }
+
+  function handleCloseCamera() {
+    setCameraOpen(false);
   }
 
   if (!permission) {
@@ -318,21 +355,125 @@ function ScanScreen() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
 
-      {/* Camera Modal */}
-      <Modal visible={cameraOpen} animationType="slide">
-        <View style={{ flex: 1, backgroundColor: "#000" }}>
+      {/* Modern Camera Modal */}
+      <Modal visible={cameraOpen} animationType="slide" statusBarTranslucent>
+        <View style={styles.modernCameraContainer}>
           <CameraView
-            style={{ flex: 1 }}
+            style={styles.modernCameraView}
             facing={facing}
+            flash={flash}
             ref={cameraRef}
           />
-          <View style={styles.cameraButtonContainer}>
-            {/* <TouchableOpacity style={[styles.button, { marginRight: 10 }]} onPress={toggleCameraFacing}>
-              <Text style={styles.buttonText}>Flip</Text>
-            </TouchableOpacity> */}
-            <TouchableOpacity style={styles.button} onPress={handleTakePicture} disabled={loading}>
-              <Text style={styles.buttonText}>{loading ? "Processing..." : "Capture"}</Text>
-            </TouchableOpacity>
+          
+          {/* Camera Overlay */}
+          <View style={styles.cameraOverlay}>
+            {/* Top Controls */}
+            <View style={styles.cameraTopControls}>
+              <TouchableOpacity 
+                style={styles.cameraControlButton} 
+                onPress={handleCloseCamera}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+              
+              <View style={styles.cameraTopRight}>
+                <TouchableOpacity 
+                  style={[styles.cameraControlButton, flash === 'on' && styles.activeFlashButton]} 
+                  onPress={toggleFlash}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons 
+                    name={flash === 'off' ? "flash-off" : "flash"} 
+                    size={24} 
+                    color={flash === 'on' ? "#FFD700" : "#fff"} 
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Center Focus Area */}
+            <View style={styles.cameraFocusArea}>
+              <View style={styles.focusFrame}>
+                <View style={styles.focusCorner} />
+                <View style={[styles.focusCorner, styles.focusCornerTopRight]} />
+                <View style={[styles.focusCorner, styles.focusCornerBottomLeft]} />
+                <View style={[styles.focusCorner, styles.focusCornerBottomRight]} />
+              </View>
+              <Text style={styles.focusText}>Position plant disease within frame</Text>
+            </View>
+
+            {/* Bottom Controls */}
+            <View style={styles.cameraBottomControls}>
+              <View style={styles.cameraBottomRow}>
+                {/* Gallery Button */}
+                <TouchableOpacity 
+                  style={styles.galleryButton}
+                  onPress={handlePickImage}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="images" size={24} color="#fff" />
+                </TouchableOpacity>
+
+                {/* Capture Button */}
+                <TouchableOpacity 
+                  style={[styles.captureButton, loading && styles.captureButtonDisabled]} 
+                  onPress={handleTakePicture} 
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="large" color="#fff" />
+                  ) : (
+                    <View style={styles.captureButtonInner}>
+                      <Ionicons name="camera" size={32} color={Green} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+
+                {/* Flip Camera Button */}
+                <TouchableOpacity 
+                  style={styles.flipButton}
+                  onPress={toggleCameraFacing}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="camera-reverse" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+              
+              {/* Instructions */}
+              <Text style={styles.cameraInstructions}>
+                Tap to capture • Ensure good lighting for best results
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Processing Modal */}
+      <Modal visible={processingVisible} transparent animationType="fade">
+        <View style={styles.processingModalOverlay}>
+          <View style={styles.processingModalContainer}>
+            {/* Processing Animation */}
+            <View style={styles.processingAnimationContainer}>
+              <View style={styles.processingCircle}>
+                <ActivityIndicator size="large" color={Green} />
+              </View>
+            </View>
+            
+            {/* Processing Text */}
+            <Text style={styles.processingTitle}>Analyzing Plant</Text>
+            <Text style={styles.processingSubtitle}>
+              Our AI is examining your photo for disease detection...
+            </Text>
+            
+            {/* Progress Indicator */}
+            <View style={styles.processingProgress}>
+              <View style={styles.processingProgressBar}>
+                <View style={styles.processingProgressFill} />
+              </View>
+              <Text style={styles.processingProgressText}>Please wait</Text>
+            </View>
           </View>
         </View>
       </Modal>
@@ -785,15 +926,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
-    paddingTop: 60,
-    paddingBottom: 20,
+    alignItems: "center",
+    paddingTop: 40,
+    paddingBottom: 40,
     paddingHorizontal: 20,
   },
   modernModalContainer: {
     backgroundColor: "#fff",
     borderRadius: 25,
     flex: 1,
-    maxHeight: "100%",
+    width: "100%",
+    maxWidth: 400,
+    maxHeight: "95%",
     elevation: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
@@ -856,6 +1000,7 @@ const styles = StyleSheet.create({
   imagePreviewSection: {
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 24,
     alignItems: "center",
   },
   imagePreviewContainer: {
@@ -1328,5 +1473,238 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
+  },
+
+  // Modern Camera Modal Styles
+  modernCameraContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  modernCameraView: {
+    flex: 1,
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "space-between",
+    paddingTop: 60,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+  },
+  cameraTopControls: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  cameraTopRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  cameraControlButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: 5,
+  },
+  activeFlashButton: {
+    backgroundColor: "rgba(255, 215, 0, 0.3)",
+    borderWidth: 2,
+    borderColor: "#FFD700",
+  },
+  cameraFocusArea: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  focusFrame: {
+    width: 250,
+    height: 250,
+    position: "relative",
+    marginBottom: 20,
+  },
+  focusCorner: {
+    position: "absolute",
+    width: 30,
+    height: 30,
+    borderColor: "#fff",
+    borderWidth: 3,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    top: 0,
+    left: 0,
+  },
+  focusCornerTopRight: {
+    transform: [{ rotate: "90deg" }],
+    top: 0,
+    right: 0,
+    left: "auto",
+  },
+  focusCornerBottomLeft: {
+    transform: [{ rotate: "-90deg" }],
+    bottom: 0,
+    left: 0,
+    top: "auto",
+  },
+  focusCornerBottomRight: {
+    transform: [{ rotate: "180deg" }],
+    bottom: 0,
+    right: 0,
+    top: "auto",
+    left: "auto",
+  },
+  focusText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "500",
+    textAlign: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  cameraBottomControls: {
+    alignItems: "center",
+  },
+  cameraBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 20,
+  },
+  galleryButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  captureButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  captureButtonDisabled: {
+    backgroundColor: "rgba(255,255,255,0.7)",
+  },
+  captureButtonInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F8F9FA",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: Green,
+  },
+  flipButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  cameraInstructions: {
+    color: "#fff",
+    fontSize: 14,
+    textAlign: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    fontWeight: "500",
+  },
+
+  // Processing Modal Styles
+  processingModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  processingModalContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    paddingVertical: 40,
+    paddingHorizontal: 30,
+    minWidth: 280,
+    alignItems: "center",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  processingAnimationContainer: {
+    width: 80,
+    height: 80,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  processingCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#F0FFF4",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  processingTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: DarkGreen,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  processingSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  processingProgress: {
+    width: "100%",
+    alignItems: "center",
+  },
+  processingProgressBar: {
+    width: "100%",
+    height: 4,
+    backgroundColor: "#E9ECEF",
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: 12,
+  },
+  processingProgressFill: {
+    width: "60%",
+    height: "100%",
+    backgroundColor: Green,
+    borderRadius: 2,
+  },
+  processingProgressText: {
+    fontSize: 12,
+    color: "#999",
+    fontWeight: "500",
   },
 });
