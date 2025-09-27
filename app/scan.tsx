@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 40,
   },
 
   // Header Section
