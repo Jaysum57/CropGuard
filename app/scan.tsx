@@ -239,9 +239,6 @@ function ScanScreen() {
               style={styles.heroImage}
               resizeMode="contain"
             />
-            <View style={styles.heroOverlay}>
-              <Ionicons name="scan" size={60} color={Green} />
-            </View>
           </View>
         </View>
 
@@ -725,27 +722,15 @@ const styles = StyleSheet.create({
   // Hero Section
   heroContainer: {
     alignItems: "center",
-    paddingVertical: 32,
+    paddingVertical: 2,
     paddingHorizontal: 20,
   },
   heroImageWrapper: {
-    position: "relative",
-    marginBottom: 16,
+    marginBottom: 1,
   },
   heroImage: {
-    width: 120,
-    height: 120,
-  },
-  heroOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 60,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 160,
+    height: 160,
   },
 
   // Actions Section
