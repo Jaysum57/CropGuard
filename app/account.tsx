@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Alert, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 // Responsive sizing
 const { width } = Dimensions.get("window");
@@ -56,15 +56,8 @@ export default function Account() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Profile Header */}
         <View style={styles.profileHeader}>
-          <View style={styles.profileImageContainer}>
-            <Image 
-              source={require("../assets/fonts/images/CropGuardLogo.png")} 
-              style={styles.profileImage}
-              resizeMode="contain"
-            />
-            <View style={styles.avatarOverlay}>
-              <Ionicons name="person" size={40} color={Green} />
-            </View>
+          <View style={styles.profileIconContainer}>
+            <Ionicons name="person" size={40} color={Green} />
           </View>
           <Text style={styles.userName}>{user.name}</Text>
           <Text style={styles.userEmail}>{user.email}</Text>
@@ -179,26 +172,14 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 30,
     marginBottom: 20,
   },
-  profileImageContainer: {
-    position: "relative",
-    marginBottom: 16,
-  },
-  profileImage: {
+  profileIconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
     backgroundColor: "#fff",
-  },
-  avatarOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    borderRadius: 40,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 16,
   },
   userName: {
     color: "#fff",
