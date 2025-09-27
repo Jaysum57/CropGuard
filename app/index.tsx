@@ -124,15 +124,8 @@ export default function Index() {
               Use AI-powered disease detection to keep your crops healthy and thriving
             </Text>
           </View>
-          <View style={styles.heroImageContainer}>
-            <Image
-              source={require("../assets/fonts/images/CropGuardLogo.png")}
-              style={styles.heroImage}
-              resizeMode="contain"
-            />
-            <View style={styles.heroImageOverlay}>
-              <Ionicons name="leaf" size={60} color={Green} />
-            </View>
+          <View style={styles.heroIconContainer}>
+            <Ionicons name="leaf" size={30} color={Green} />
           </View>
         </View>
 
@@ -333,23 +326,18 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     lineHeight: 20,
   },
-  heroImageContainer: {
-    position: "relative",
-  },
-  heroImage: {
-    width: 80,
-    height: 80,
-  },
-  heroImageOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 40,
+  heroIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 60,
+    backgroundColor: OffWhite,
     justifyContent: "center",
     alignItems: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
   },
 
   // Actions Section
@@ -537,6 +525,6 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacing: {
-    height: 40,
+    height: 0,
   },
 });
