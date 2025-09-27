@@ -268,6 +268,8 @@ const styles = StyleSheet.create({
   statsCard: {
     flexDirection: "row",
     backgroundColor: OffWhite,
+    // borderColor: "#E0E0E0",
+    // borderWidth: 1,
     borderRadius: 16,
     padding: 20,
     alignItems: "center",
@@ -397,17 +399,18 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 16,
     paddingHorizontal: 20,
   },
   viewAllButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 12,
     backgroundColor: OffWhite,
     borderRadius: 20,
+    marginTop: 2,
   },
   viewAllText: {
     fontSize: 14,
