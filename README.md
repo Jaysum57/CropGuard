@@ -1,50 +1,155 @@
-# Welcome to your Expo app 👋
+# CropGuard 🌱
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+CropGuard is an AI-powered plant disease detection mobile application built with React Native and Expo. The app helps farmers and gardeners identify plant diseases through image analysis, providing early detection and treatment recommendations to protect crops and improve agricultural outcomes.
 
-## Get started
+## Features
 
-1. Install dependencies
+🔍 **Plant Disease Scanning** - Capture or upload plant images for AI-powered disease detection  
+📊 **User Statistics** - Track scanning history, accuracy rates, and disease detection records  
+👤 **User Account Management** - Personalized profiles with scanning statistics and preferences  
+🎯 **Disease Information** - Detailed information about detected diseases and treatment options  
+📱 **Cross-Platform** - Available on both iOS and Android devices  
 
+## Technology Stack
+
+- **Frontend**: React Native with Expo
+- **Navigation**: Expo Router (file-based routing)
+- **UI Components**: React Native, Ionicons
+- **Language**: TypeScript
+- **Styling**: StyleSheet with responsive design
+- **AI Integration**: Plant disease detection model (HuggingFace integration)
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v16 or higher)
+- npm or yarn
+- Expo CLI
+- iOS Simulator (for macOS) or Android Emulator
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Jaysum57/CropGuard.git
+   cd CropGuard
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. Start the app
-
+3. **Start the development server**
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+4. **Run on device/emulator**
+   - For iOS: Press `i` to open in iOS Simulator
+   - For Android: Press `a` to open in Android Emulator
+   - For physical device: Scan QR code with Expo Go app
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Project Structure
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+```
+CropGuard/
+├── app/                    # Main application screens
+│   ├── _layout.tsx        # Root layout component
+│   ├── index.tsx          # Home/landing screen
+│   ├── scan.tsx           # Plant scanning interface
+│   ├── account.tsx        # User profile and settings
+│   └── details/           # Disease detail screens
+│       ├── disease.tsx    # General disease information
+│       └── rust.tsx       # Rust disease specifics
+├── assets/                # Static assets
+│   ├── fonts/            # Custom fonts and images
+│   └── images/           # App icons and splash screens
+├── app-example/          # Example/template code
+└── README.md
+```
 
-## Get a fresh project
+## Key Features Overview
 
-When you're ready, run:
+### Home Screen (`index.tsx`)
+- Welcome interface with app branding
+- Quick access to scanning functionality
+- Clean, modern UI with hero section
+
+### Scanning Interface (`scan.tsx`)
+- Camera integration for plant image capture
+- AI-powered disease detection processing
+- Results display and analysis
+
+### User Account (`account.tsx`)
+- Personal statistics and scanning history
+- Account information management
+- Settings and preferences
+
+### Disease Details (`details/`)
+- Comprehensive disease information
+- Treatment recommendations
+- Educational content about plant health
+
+## Development
+
+### Available Scripts
 
 ```bash
+# Start development server
+npm start
+
+# Start with specific platform
+npx expo start --ios
+npx expo start --android
+
+# Build for production
+npx expo build
+
+# Reset project (removes example code)
 npm run reset-project
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Code Style
 
-## Learn more
+- TypeScript for type safety
+- Consistent component structure
+- Responsive design principles
+- Clean, documented code
 
-To learn more about developing your project with Expo, look at the following resources:
+## Contributing
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Join the community
+## AI Model Integration
 
-Join our community of developers creating universal apps.
+CropGuard integrates with a plant disease detection model for accurate diagnosis. The AI component is housed in a separate HuggingFace implementation that provides:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Real-time image analysis
+- Disease classification
+- Confidence scoring
+- Treatment recommendations
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Contact
+
+**Project Maintainer**: Jaysum57  
+**Repository**: [https://github.com/Jaysum57/CropGuard](https://github.com/Jaysum57/CropGuard)
+
+## Acknowledgments
+
+- Expo team for the excellent React Native framework
+- HuggingFace for AI model infrastructure
+- Open source community for various dependencies
+
+---
+
+**Built with ❤️ for sustainable agriculture and crop protection**
