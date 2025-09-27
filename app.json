@@ -49,7 +49,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with your friends."
+          "photosPermission": "Allow CropGuard to access your photos to scan plants for diseases.",
+          "cameraPermission": "Allow CropGuard to access your camera to take photos of plants."
         }
       ]
     ],

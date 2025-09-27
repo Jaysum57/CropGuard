@@ -27,9 +27,19 @@ function ScanScreen() {
   const handlePickImage = async () => {
     setLoading(true);
     try {
+      // Request permissions first (important for iOS)
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        alert("Sorry, we need camera roll permissions to make this work!");
+        setLoading(false);
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
+        aspect: [1, 1],
         quality: 1,
         base64: false,
       });
@@ -71,6 +81,7 @@ function ScanScreen() {
       if (err instanceof Error) {
         errorMsg = `${err.name}: ${err.message}`;
         console.error("Image picker prediction error:", err);
+        console.error("Full error details:", JSON.stringify(err, null, 2));
       }
       setResult({ error: errorMsg });
       
