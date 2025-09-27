@@ -30,6 +30,11 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Windows
+desktop.ini
+Thumbs.db
+*.lnk
+
 # local env files
 .env*.local
 
