@@ -1,6 +1,18 @@
+<!-- <p align="center">
+   <img src="assets/images/icon.png" alt="icon" height="200">
+</p> -->
+
 # CropGuard 🌱
 
 CropGuard is an AI-powered plant disease detection mobile application built with React Native and Expo. The app helps farmers and gardeners identify plant diseases through image analysis, providing early detection and treatment recommendations to protect crops and improve agricultural outcomes.
+
+
+<p align="center">
+  <img src="repo-assets/1.jpg" alt="screenshot 1" width="220"/>
+  <img src="repo-assets/2.jpg" alt="screenshot 2" width="220"/>
+  <img src="repo-assets/3.jpg" alt="screenshot 3" width="220"/>
+  <img src="repo-assets/4.jpg" alt="screenshot 4" width="220"/>
+</p>
 
 ## Features
 
