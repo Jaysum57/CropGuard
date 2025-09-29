@@ -8,10 +8,7 @@ CropGuard is an AI-powered plant disease detection mobile application built with
 
 
 <p align="center">
-  <img src="repo-assets/1.jpg" alt="screenshot 1" width="220"/>
-  <img src="repo-assets/2.jpg" alt="screenshot 2" width="220"/>
-  <img src="repo-assets/3.jpg" alt="screenshot 3" width="220"/>
-  <img src="repo-assets/4.jpg" alt="screenshot 4" width="220"/>
+  <img src="repo-assets/1.png" alt="screenshot 1"/>
 </p>
 
 ## Features
