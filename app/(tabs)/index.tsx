@@ -35,7 +35,7 @@ const diseases: Disease[] = [
   {
     title: "Rust",
     description: "Fungal disease causing orange-brown pustules on plant leaves and stems.",
-    image: require("../assets/fonts/images/rust.jpg"),
+    image: require("../../assets/fonts/images/rust.jpg"),
     page: "/details/rust",
     tag: "Fungal",
     severity: "High",

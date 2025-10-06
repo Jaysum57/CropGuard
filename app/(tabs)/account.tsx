@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { OnboardingManager } from '../components/AppStateProvider';
+import { OnboardingManager } from '../../components/AppStateProvider';
 
 // Responsive sizing
 const { width } = Dimensions.get("window");
