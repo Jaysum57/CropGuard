@@ -4,14 +4,14 @@ import * as NavigationBar from 'expo-navigation-bar';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Dimensions,
-  Platform,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Animated,
+    Dimensions,
+    Platform,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -90,12 +90,12 @@ export default function OnboardingScreen() {
 
   const skipOnboarding = async () => {
     await AsyncStorage.setItem('hasSeenOnboarding', 'true');
-    router.replace('/' as any);
+    router.push('/auth' as any);
   };
 
   const completeOnboarding = async () => {
     await AsyncStorage.setItem('hasSeenOnboarding', 'true');
-    router.replace('/' as any);
+    router.push('/auth' as any);
   };
 
   const goToSlide = (index: number) => {
