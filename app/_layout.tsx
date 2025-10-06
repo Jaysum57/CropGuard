@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AppStateProvider, { useAppState } from '../components/AppStateProvider';
+import OnboardingScreen from '../components/onboarding';
 
 const Green = '#30BE63';
 const OffWhite = '#F6F6F6';
 const DarkGreen = '#021a09ff';
 
-const _layout = () => {
-  const router = useRouter();
-
+const TabsLayout = () => {
   return (
     <View style={styles.container}>
       <Tabs
@@ -31,6 +31,26 @@ const _layout = () => {
         <Tabs.Screen name="account" options={{ title: 'Account' }} />
       </Tabs>
     </View>
+  );
+};
+
+const AppContent = () => {
+  const { hasSeenOnboarding } = useAppState();
+
+  // Show onboarding if user hasn't seen it yet
+  if (!hasSeenOnboarding) {
+    return <OnboardingScreen />;
+  }
+
+  // Show main app with tabs
+  return <TabsLayout />;
+};
+
+const _layout = () => {
+  return (
+    <AppStateProvider>
+      <AppContent />
+    </AppStateProvider>
   );
 };
 
