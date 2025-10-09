@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { OnboardingManager } from '../../components/AppStateProvider';
 
 // Responsive sizing
 const { width } = Dimensions.get("window");
@@ -49,6 +50,46 @@ export default function Account() {
   const handleSettings = () => {
     console.log("Open settings");
     // TODO: Navigate to settings screen
+  };
+
+  const handleResetOnboarding = () => {
+    Alert.alert(
+      "Reset Onboarding",
+      "This will show the onboarding screens again when you restart the app. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await OnboardingManager.resetOnboarding();
+              Alert.alert(
+                "Success", 
+                "Onboarding has been reset. Restart the app to see the onboarding screens again.",
+                [
+                  {
+                    text: "Restart App",
+                    onPress: () => {
+                      // Force app reload by clearing cache and restarting
+                      // In development, this will trigger a reload
+                      if (__DEV__) {
+                        // @ts-ignore
+                        window.location.reload();
+                      }
+                    }
+                  },
+                  { text: "OK" }
+                ]
+              );
+            } catch (error) {
+              Alert.alert("Error", "Failed to reset onboarding.");
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   return (
@@ -141,6 +182,11 @@ export default function Account() {
           <TouchableOpacity style={styles.settingsButton} onPress={handleSettings}>
             <Ionicons name="settings-outline" size={20} color={DarkGreen} />
             <Text style={styles.settingsButtonText}>Settings & Privacy</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.resetButton} onPress={handleResetOnboarding}>
+            <Ionicons name="refresh-outline" size={20} color="#FF8C00" />
+            <Text style={styles.resetButtonText}>Reset Onboarding</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -347,6 +393,29 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+    marginLeft: 8,
+  },
+  resetButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    borderWidth: 1,
+    borderColor: "#FF8C00",
+  },
+  resetButtonText: {
+    color: "#FF8C00",
+    fontSize: 16,
+    fontWeight: "600",
     marginLeft: 8,
   },
   footer: {

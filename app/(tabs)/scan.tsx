@@ -246,7 +246,7 @@ function ScanScreen() {
         <View style={styles.heroContainer}>
           <View style={styles.heroImageWrapper}>
             <Image
-              source={require("../assets/fonts/images/CropGuardScanLogo.png")}
+              source={require("../../assets/fonts/images/CropGuardScanLogo.png")}
               style={styles.heroImage}
               resizeMode="contain"
             />

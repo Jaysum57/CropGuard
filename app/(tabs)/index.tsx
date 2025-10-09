@@ -2,15 +2,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
-  Dimensions,
-  FlatList,
-  Image,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    FlatList,
+    Image,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -35,7 +35,7 @@ const diseases: Disease[] = [
   {
     title: "Rust",
     description: "Fungal disease causing orange-brown pustules on plant leaves and stems.",
-    image: require("../assets/fonts/images/rust.jpg"),
+    image: require("../../assets/fonts/images/rust.jpg"),
     page: "/details/rust",
     tag: "Fungal",
     severity: "High",
