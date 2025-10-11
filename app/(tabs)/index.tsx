@@ -1,18 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Href, useRouter } from "expo-router";
 import React from "react";
 import {
-    Dimensions,
-    FlatList,
-    Image,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  FlatList,
+  Image,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const images = {
+  commonRust: require("../../assets/images/common_rust.jpg"), 
+  rust: require("../../assets/images/rust.jpg"),
+  // Add more images here as needed
+};
 
 const screenWidth = Dimensions.get("window").width;
 const CARD_WIDTH = screenWidth * 0.7;
@@ -25,7 +31,7 @@ type Disease = {
   title: string;
   description: string;
   image?: any;
-  page: "/details/rust" | "/details/disease";
+  page: string;
   tag: string;
   severity: "Low" | "Medium" | "High";
   color: string;
@@ -33,9 +39,18 @@ type Disease = {
 
 const diseases: Disease[] = [
   {
+    title: "Common Rust",
+    description: "Fungal disease forming orange-brown pustules on leaves and stems.",
+    image: images.commonRust, 
+    page: "/details/common_rust",
+    tag: "Fungal",
+    severity: "High",
+    color: "#E53E3E",
+  },
+  {
     title: "Rust",
     description: "Fungal disease causing orange-brown pustules on plant leaves and stems.",
-    image: require("../../assets/fonts/images/rust.jpg"),
+    image: images.rust, 
     page: "/details/rust",
     tag: "Fungal",
     severity: "High",
@@ -44,6 +59,7 @@ const diseases: Disease[] = [
   {
     title: "Powdery Mildew",
     description: "White powdery fungus that affects leaf surfaces and reduces photosynthesis.",
+    // image: images.mildew, // Uncomment when you have this image
     page: "/details/disease",
     tag: "Fungal",
     severity: "Medium",
@@ -52,6 +68,7 @@ const diseases: Disease[] = [
   {
     title: "Leaf Spot",
     description: "Circular dark spots caused by fungal or bacterial infections.",
+    // No image specified since file doesn't exist
     page: "/details/disease",
     tag: "Bacterial",
     severity: "Low",
@@ -176,7 +193,7 @@ export default function Index() {
               <TouchableOpacity
                 style={styles.diseaseCard}
                 activeOpacity={0.9}
-                onPress={() => router.push(item.page)}
+                onPress={() => router.push(item.page as Href)}
               >
                 <View style={styles.diseaseImageContainer}>
                   {item.image ? (

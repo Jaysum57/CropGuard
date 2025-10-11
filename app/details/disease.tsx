@@ -22,7 +22,6 @@ const DarkGreen = "#021A1A";
 const Yellow = "#FFD94D";
 
 interface Disease {
-  id: string;
   title: string;
   description: string;
   image?: any;
@@ -35,48 +34,6 @@ interface Disease {
 
 const diseases: Disease[] = [
   {
-    id: "1",
-    title: "Rust",
-    description: "Fungal disease causing orange-brown pustules on leaves.",
-    image: require("../../assets/fonts/images/rust.jpg"),
-    page: "/details/rust",
-    category: "Fungal",
-    severity: "High",
-    commonOn: ["Wheat", "Corn", "Beans"],
-    symptoms: ["Orange pustules", "Leaf yellowing", "Stunted growth"]
-  },
-  {
-    id: "2",
-    title: "Powdery Mildew",
-    description: "White powdery fungus that affects leaf surfaces.",
-    page: "/details/rust",
-    category: "Fungal",
-    severity: "Medium",
-    commonOn: ["Grapes", "Roses", "Cucumbers"],
-    symptoms: ["White powder coating", "Leaf curling", "Reduced photosynthesis"]
-  },
-  {
-    id: "3",
-    title: "Leaf Spot",
-    description: "Circular dark spots caused by fungal or bacterial infection.",
-    page: "/details/rust",
-    category: "Bacterial",
-    severity: "Medium",
-    commonOn: ["Tomatoes", "Peppers", "Lettuce"],
-    symptoms: ["Dark circular spots", "Leaf yellowing", "Premature leaf drop"]
-  },
-  {
-    id: "4",
-    title: "Blight",
-    description: "Rapid browning and death of plant tissues.",
-    page: "/details/rust",
-    category: "Fungal",
-    severity: "High",
-    commonOn: ["Potatoes", "Tomatoes", "Peppers"],
-    symptoms: ["Rapid browning", "Wilting", "Black lesions"]
-  },
-  {
-    id: "5",
     title: "Aphid Infestation",
     description: "Small insects that suck plant sap and spread viruses.",
     page: "/details/rust",
@@ -86,7 +43,33 @@ const diseases: Disease[] = [
     symptoms: ["Sticky honeydew", "Curled leaves", "Stunted growth"]
   },
   {
-    id: "6",
+    title: "Blight",
+    description: "Rapid browning and death of plant tissues.",
+    page: "/details/rust",
+    category: "Fungal",
+    severity: "High",
+    commonOn: ["Potatoes", "Tomatoes", "Peppers"],
+    symptoms: ["Rapid browning", "Wilting", "Black lesions"]
+  },
+  {
+    title: "Leaf Spot",
+    description: "Circular dark spots caused by fungal or bacterial infection.",
+    page: "/details/rust",
+    category: "Bacterial",
+    severity: "Medium",
+    commonOn: ["Tomatoes", "Peppers", "Lettuce"],
+    symptoms: ["Dark circular spots", "Leaf yellowing", "Premature leaf drop"]
+  },
+  {
+    title: "Powdery Mildew",
+    description: "White powdery fungus that affects leaf surfaces.",
+    page: "/details/rust",
+    category: "Fungal",
+    severity: "Medium",
+    commonOn: ["Grapes", "Roses", "Cucumbers"],
+    symptoms: ["White powder coating", "Leaf curling", "Reduced photosynthesis"]
+  },
+  {
     title: "Root Rot",
     description: "Fungal infection affecting plant root systems.",
     page: "/details/rust",
@@ -94,6 +77,16 @@ const diseases: Disease[] = [
     severity: "High",
     commonOn: ["Houseplants", "Trees", "Vegetables"],
     symptoms: ["Wilting", "Yellow leaves", "Musty smell"]
+  },
+  {
+    title: "Rust",
+    description: "Fungal disease causing orange-brown pustules on leaves.",
+    image: require("../../assets/images/rust.jpg"),
+    page: "/details/rust",
+    category: "Fungal",
+    severity: "High",
+    commonOn: ["Wheat", "Corn", "Beans"],
+    symptoms: ["Orange pustules", "Leaf yellowing", "Stunted growth"]
   },
 ];
 
@@ -209,7 +202,7 @@ export default function AllDiseases() {
         <View style={styles.gridContainer}>
           <FlatList
             data={filteredDiseases}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.title}
             numColumns={2}
             scrollEnabled={false}
             ItemSeparatorComponent={() => <View style={{ height: 8 }} />}

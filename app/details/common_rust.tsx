@@ -1,3 +1,4 @@
+
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -12,113 +13,125 @@ const Yellow = "#FFD94D";
 const Orange = "#FF8C00";
 const Red = "#E53E3E";
 
-export default function Rust() {
+export default function CommonRust() {
   const router = useRouter();
 
   const diseaseData = {
-    name: "Rust Disease",
-    scientificName: "Puccinia spp.",
+    name: "Common Rust",
+    scientificName: "Puccinia sorghi",
     severity: "High",
     category: "Fungal Disease",
-    description: "A fungal disease that causes reddish-brown or orange pustules on plant leaves, weakening the plant and reducing crop yields.",
-    affectedCrops: ["Wheat", "Corn", "Coffee", "Beans", "Roses", "Apple Trees"],
+    description:
+      "Common Rust is a fungal disease that affects corn leaves, forming reddish-brown pustules that weaken the plant, reduce photosynthesis, and lower yields.",
+    affectedCrops: ["Corn (Maize)", "Sweet Corn"],
     quickStats: {
       severity: { level: "High", score: "8/10" },
-      transmission: { level: "Fast", score: "9/10" }, 
+      transmission: { level: "Fast", score: "8/10" },
       treatment: { level: "Medium", score: "6/10" },
-      impact: { level: "Severe", score: "9/10" }
-    }
+      impact: { level: "Severe", score: "8/10" },
+    },
   };
 
   const keySymptoms = [
     {
-      title: "Orange Pustules",
-      description: "Small, raised, orange or reddish-brown spots on leaf undersides",
+      title: "Reddish-Brown Pustules",
+      description:
+        "Small, round, rust-colored pustules appear on both upper and lower leaf surfaces.",
       severity: "critical",
-      icon: "alert-circle"
+      icon: "alert-circle",
     },
     {
-      title: "Leaf Yellowing", 
-      description: "Leaves turn yellow and may drop prematurely",
+      title: "Premature Leaf Drying",
+      description:
+        "Leaves turn yellow or brown early, reducing photosynthetic activity.",
       severity: "high",
-      icon: "leaf"
+      icon: "leaf",
     },
     {
-      title: "Growth Stunting",
-      description: "Plants show reduced growth and vigor",
+      title: "Reduced Kernel Development",
+      description:
+        "Less photosynthesis leads to small, poorly filled corn kernels.",
+      severity: "high",
+      icon: "bar-chart",
+    },
+    {
+      title: "Decreased Growth",
+      description:
+        "Infected plants show reduced vigor and may mature early with lower yield.",
       severity: "moderate",
-      icon: "trending-down"
+      icon: "trending-down",
     },
-    {
-      title: "Yield Reduction",
-      description: "Significant decrease in crop production",
-      severity: "critical", 
-      icon: "bar-chart"
-    }
   ];
 
   const preventionMethods = [
     {
-      title: "Plant Spacing",
-      description: "Ensure adequate spacing between plants for proper air circulation",
-      icon: "resize-outline",
-      difficulty: "Easy"
-    },
-    {
-      title: "Water Management", 
-      description: "Water at soil level to avoid wetting leaves",
-      icon: "water-outline",
-      difficulty: "Easy"
-    },
-    {
       title: "Resistant Varieties",
-      description: "Choose rust-resistant plant varieties when available", 
+      description:
+        "Plant corn hybrids that are resistant or tolerant to Common Rust.",
       icon: "shield-checkmark-outline",
-      difficulty: "Medium"
+      difficulty: "Medium",
     },
     {
-      title: "Regular Monitoring",
-      description: "Keep enough space between plants so air can flow and leaves dry faster.",
-      icon: "resize-outline"
+      title: "Crop Rotation",
+      description:
+        "Avoid planting corn in the same field year after year to reduce fungal spores.",
+      icon: "refresh-outline",
+      difficulty: "Medium",
     },
     {
-      title: "Water at the Base",
-      description: "Avoid watering leaves. Water the soil near the roots instead.",
-      icon: "arrow-down-outline"
+      title: "Plant Timing",
+      description:
+        "Plant early so crops mature before rust pressure becomes high.",
+      icon: "time-outline",
+      difficulty: "Easy",
     },
     {
-      title: "Regular Monitoring",
-      description: "Check plants often for early spots so you can stop the disease quickly.",
-      icon: "eye-outline"
-    }
+      title: "Field Sanitation",
+      description:
+        "Remove and destroy infected crop residues after harvest to limit spore survival.",
+      icon: "trash-outline",
+      difficulty: "Easy",
+    },
+    {
+      title: "Adequate Spacing",
+      description:
+        "Maintain proper plant spacing for good airflow and faster leaf drying.",
+      icon: "resize-outline",
+      difficulty: "Easy",
+    },
   ];
 
   const treatments = [
     {
       title: "Apply Fungicides",
-      description: "Spray fungicides with copper or sulfur when you see the first signs.",
+      description:
+        "Use fungicides containing azoxystrobin, pyraclostrobin, or propiconazole when rust first appears.",
       icon: "medical-outline",
-      effectiveness: "High"
+      effectiveness: "High",
     },
     {
-      title: "Use Natural Sprays",
-      description: "Neem oil or baking soda spray can help control rust naturally.",
-      icon: "leaf",
-      effectiveness: "Moderate"
+      title: "Monitor Regularly",
+      description:
+        "Inspect fields weekly for early signs of pustules, especially under humid conditions.",
+      icon: "eye-outline",
+      effectiveness: "Moderate",
     },
     {
-      title: "Remove Affected Leaves",
-      description: "Cut off and throw away sick leaves. Do not put them in compost.",
+      title: "Remove Infected Leaves",
+      description:
+        "If possible, remove heavily infected leaves to reduce spore spread.",
       icon: "cut-outline",
-      effectiveness: "Moderate"
+      effectiveness: "Low",
     },
     {
-      title: "Improve Air and Drainage",
-      description: "Make sure plants get air and water drains well so leaves don't stay wet.",
+      title: "Improve Air Circulation",
+      description:
+        "Ensure proper plant spacing and field management to minimize humidity.",
       icon: "sunny-outline",
-      effectiveness: "High"
-    }
+      effectiveness: "High",
+    },
   ];
+
 
   const getSeverityColor = (severity: string) => {
     switch (severity.toLowerCase()) {
@@ -151,7 +164,7 @@ export default function Rust() {
         <View style={styles.heroSection}>
           <View style={styles.imageContainer}>
             <Image
-              source={require("../../assets/images/rust.jpg")}
+              source={require("../../assets/images/common_rust.jpg")}
               style={styles.diseaseImage}
             />
             <View style={styles.imageOverlay}>
