@@ -13,12 +13,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const images = {
-  commonRust: require("../../assets/images/common_rust.jpg"), 
-  rust: require("../../assets/images/rust.jpg"),
-  // Add more images here as needed
-};
+import { getAllDiseases } from "../../components/DiseaseData";
 
 const screenWidth = Dimensions.get("window").width;
 const CARD_WIDTH = screenWidth * 0.7;
@@ -27,54 +22,25 @@ const Yellow = "#FFD94D";
 const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 
-type Disease = {
-  title: string;
-  description: string;
-  image?: any;
-  page: string;
-  tag: string;
-  severity: "Low" | "Medium" | "High";
-  color: string;
+const severityColors = {
+  Low: "#38A169",    // Green
+  Medium: "#FF8C00", // Orange
+  High: "#E53E3E",   // Red
 };
 
-const diseases: Disease[] = [
-  {
-    title: "Common Rust",
-    description: "Fungal disease forming orange-brown pustules on leaves and stems.",
-    image: images.commonRust, 
-    page: "/details/common_rust",
-    tag: "Fungal",
-    severity: "High",
-    color: "#E53E3E",
-  },
-  {
-    title: "Rust",
-    description: "Fungal disease causing orange-brown pustules on plant leaves and stems.",
-    image: images.rust, 
-    page: "/details/rust",
-    tag: "Fungal",
-    severity: "High",
-    color: "#E53E3E",
-  },
-  {
-    title: "Powdery Mildew",
-    description: "White powdery fungus that affects leaf surfaces and reduces photosynthesis.",
-    // image: images.mildew, // Uncomment when you have this image
-    page: "/details/disease",
-    tag: "Fungal",
-    severity: "Medium",
-    color: "#FF8C00",
-  },
-  {
-    title: "Leaf Spot",
-    description: "Circular dark spots caused by fungal or bacterial infections.",
-    // No image specified since file doesn't exist
-    page: "/details/disease",
-    tag: "Bacterial",
-    severity: "Low",
-    color: "#38A169",
-  },
-];
+// Convert disease data to the format expected by the UI
+const diseaseData = getAllDiseases();
+const diseases = diseaseData.map(disease => ({
+  title: disease.name,
+  description: disease.description,
+  image: disease.image,
+  page: `/details/${disease.id}` as Href,
+  tag: disease.category.includes('Fungal') ? 'Fungal' : 
+       disease.category.includes('Bacterial') ? 'Bacterial' : 'Other',
+  severity: disease.severity,
+  color: severityColors[disease.severity],
+}));
+
 
 const quickActions = [
   {
@@ -89,7 +55,7 @@ const quickActions = [
     description: "Browse common plant diseases",
     icon: "library" as const,
     color: "#8B5CF6",
-    route: "/details/disease" as const,
+    route: "/details/diseaseLibrary" as const,
   },
 ];
 
@@ -176,7 +142,7 @@ export default function Index() {
             <Text style={styles.sectionTitle}>Common Plant Diseases</Text>
             <TouchableOpacity 
               style={styles.viewAllButton}
-              onPress={() => router.push("/details/disease")}
+              onPress={() => router.push("/details/diseaseLibrary")}
             >
               <Text style={styles.viewAllText}>View All</Text>
               <Ionicons name="arrow-forward" size={16} color={Green} />
