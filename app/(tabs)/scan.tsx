@@ -23,11 +23,10 @@ const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 
 function ScanScreen() {
-  // ...existing code...
   const handlePickImage = async () => {
     setLoading(true);
     try {
-      // Request permissions first (important for iOS)
+      // Request permissions first 
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (permissionResult.granted === false) {
@@ -246,7 +245,7 @@ function ScanScreen() {
         <View style={styles.heroContainer}>
           <View style={styles.heroImageWrapper}>
             <Image
-              source={require("../../assets/fonts/images/CropGuardScanLogo.png")}
+              source={require("../../assets/images/CropGuardScanLogo.png")}
               style={styles.heroImage}
               resizeMode="contain"
             />
