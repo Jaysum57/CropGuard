@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import { Tabs, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // --- Added Supabase and Session Imports ---
+import { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
-import { Session } from '@supabase/supabase-js'; 
 
 // Removed the import for './account' since it's now loaded by file convention
 
@@ -113,6 +113,7 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
 
 
 export default function TabsLayout() {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
 
@@ -121,12 +122,24 @@ export default function TabsLayout() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoadingInitial(false);
+      
+      // Redirect to auth if no session found (but not immediately to prevent flash)
+      if (!session) {
+        setTimeout(() => {
+          router.replace('/auth');
+        }, 100);
+      }
     });
 
     // 2. Set up real-time listener for session changes (login/logout/token refresh)
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setSession(session);
+        
+        // Redirect to auth if user logs out
+        if (!session) {
+          router.replace('/auth');
+        }
       }
     );
 
@@ -143,6 +156,11 @@ export default function TabsLayout() {
         <Text style={{ fontSize: 18, color: DarkGreen }}>Initializing App...</Text>
       </View>
     );
+  }
+
+  // If no session is found, don't render the tabs (user will be redirected to auth)
+  if (!session) {
+    return null;
   }
 
   return (
