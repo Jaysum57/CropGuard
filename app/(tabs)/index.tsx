@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
 import React, { useContext, useEffect, useState } from "react"; // ADDED: useState, useEffect, useContext
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -13,7 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getAllDiseases } from "../../components/DiseaseData";
+import { DiseaseData, getAllDiseases } from "../../components/DiseaseData";
 import { supabase } from '../../lib/supabase'; // ADDED: supabase import
 import { SessionContext } from './_layout'; // ADDED: SessionContext import
 
@@ -33,8 +34,8 @@ interface Profile {
 type Disease = {
   title: string;
   description: string;
-  image?: any;
-  page: string;
+  image?: string;
+  page: Href;
   tag: string;
   severity: "Low" | "Medium" | "High";
   color: string;
@@ -45,20 +46,6 @@ const severityColors = {
   Medium: "#FF8C00", // Orange
   High: "#E53E3E",   // Red
 };
-
-// Convert disease data to the format expected by the UI
-const diseaseData = getAllDiseases();
-const diseases = diseaseData.map(disease => ({
-  title: disease.name,
-  description: disease.description,
-  image: disease.image,
-  page: `/details/${disease.id}` as Href,
-  tag: disease.category.includes('Fungal') ? 'Fungal' : 
-       disease.category.includes('Bacterial') ? 'Bacterial' : 'Other',
-  severity: disease.severity,
-  color: severityColors[disease.severity],
-}));
-
 
 const quickActions = [
   {
@@ -95,8 +82,12 @@ export default function Index() {
       lastScan: "2 hours ago",
   });
 
+  // 4. State for diseases data
+  const [diseases, setDiseases] = useState<Disease[]>([]);
+  const [loadingDiseases, setLoadingDiseases] = useState(true);
+
   /**
-   * 4. Function to fetch the user's profile data
+   * 5. Function to fetch the user's profile data
    */
   async function getProfile() {
       if (!session?.user) {
@@ -135,6 +126,35 @@ export default function Index() {
       }
   }
 
+  /**
+   * 6. Function to fetch diseases data
+   */
+  async function loadDiseases() {
+      try {
+          setLoadingDiseases(true);
+          const diseaseData = await getAllDiseases();
+          
+          // Convert disease data to the format expected by the UI
+          const convertedDiseases: Disease[] = diseaseData.map((disease: DiseaseData) => ({
+              title: disease.name,
+              description: disease.description,
+              image: disease.image_url,
+              page: `/details/${disease.id}` as Href,
+              tag: disease.category.includes('Fungal') ? 'Fungal' : 
+                   disease.category.includes('Bacterial') ? 'Bacterial' : 'Other',
+              severity: disease.severity,
+              color: severityColors[disease.severity],
+          }));
+          
+          setDiseases(convertedDiseases);
+      } catch (error) {
+          console.error('Error loading diseases:', error);
+          setDiseases([]);
+      } finally {
+          setLoadingDiseases(false);
+      }
+  }
+
   // 5. Load profile data when the session changes
   useEffect(() => {
       // Only try to fetch if the session is not null
@@ -147,7 +167,12 @@ export default function Index() {
       }
   }, [session]);
 
-  // 6. Determine the user's display name
+  // 6. Load diseases data on component mount
+  useEffect(() => {
+      loadDiseases();
+  }, []);
+
+  // 7. Determine the user's display name
   const userName = 
     profile?.first_name || 
     profile?.username || 
@@ -237,13 +262,19 @@ export default function Index() {
             </TouchableOpacity>
           </View>
           
-          <FlatList
-            data={diseases}
-            horizontal
-            keyExtractor={(item, index) => index.toString()}
-            contentContainerStyle={styles.diseaseCardsContainer}
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => (
+          {loadingDiseases ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Green} />
+              <Text style={styles.loadingText}>Loading diseases...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={diseases}
+              horizontal
+              keyExtractor={(item, index) => index.toString()}
+              contentContainerStyle={styles.diseaseCardsContainer}
+              showsHorizontalScrollIndicator={false}
+              renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.diseaseCard}
                 activeOpacity={0.9}
@@ -251,7 +282,7 @@ export default function Index() {
               >
                 <View style={styles.diseaseImageContainer}>
                   {item.image ? (
-                    <Image source={item.image} style={styles.diseaseImage} />
+                    <Image source={{ uri: item.image }} style={styles.diseaseImage} />
                   ) : (
                     <View style={styles.diseaseImagePlaceholder}>
                       <Ionicons name="leaf" size={40} color={Green} />
@@ -276,6 +307,7 @@ export default function Index() {
               </TouchableOpacity>
             )}
           />
+          )}
         </View>
 
         {/* Tips Section */}
@@ -600,5 +632,18 @@ const styles = StyleSheet.create({
 
   bottomSpacing: {
     height: 0,
+  },
+
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
 });

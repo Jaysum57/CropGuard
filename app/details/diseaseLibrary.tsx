@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -13,28 +14,67 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categories, diseaseDatabase } from "../../components/DiseaseData";
+import { categories, DiseaseData, getAllDiseases, getDiseasesByCategory, searchDiseases } from "../../components/DiseaseData";
 
 const screenWidth = Dimensions.get("window").width;
-const CARD_WIDTH = screenWidth * 0.45;
+const CARD_WIDTH = screenWidth * 0.42; // Reduced from 0.45 to allow for spacing
 const Green = "#30BE63";
 const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 const Yellow = "#FFD94D";
 
-const diseases = Object.values(diseaseDatabase);
-
 export default function AllDiseases() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [diseases, setDiseases] = useState<DiseaseData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filteredDiseases, setFilteredDiseases] = useState<DiseaseData[]>([]);
 
-  const filteredDiseases = diseases.filter((item) => {
-    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
-                         item.description.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  useEffect(() => {
+    loadDiseases();
+  }, []);
+
+  useEffect(() => {
+    if (search.trim()) {
+      performSearch();
+    } else {
+      filterByCategory();
+    }
+  }, [search, selectedCategory, diseases]);
+
+  const loadDiseases = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllDiseases();
+      setDiseases(data);
+    } catch (error) {
+      console.error("Error loading diseases:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const performSearch = async () => {
+    try {
+      const results = await searchDiseases(search);
+      const filtered = selectedCategory === "All" 
+        ? results 
+        : results.filter(item => item.category.toLowerCase().includes(selectedCategory.toLowerCase()));
+      setFilteredDiseases(filtered);
+    } catch (error) {
+      console.error("Error searching diseases:", error);
+    }
+  };
+
+  const filterByCategory = async () => {
+    try {
+      const filtered = await getDiseasesByCategory(selectedCategory);
+      setFilteredDiseases(filtered);
+    } catch (error) {
+      console.error("Error filtering diseases:", error);
+    }
+  };
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -54,6 +94,26 @@ export default function AllDiseases() {
       default: return 'leaf-outline';
     }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="chevron-back" size={28} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Disease Library</Text>
+            <Text style={styles.headerSubtitle}>Loading...</Text>
+          </View>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Green} />
+          <Text style={styles.loadingText}>Loading disease database...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -99,62 +159,66 @@ export default function AllDiseases() {
             <TouchableOpacity
               key={category}
               style={[
-                styles.categoryChip,
-                selectedCategory === category && styles.categoryChipActive
+                styles.categoryButton,
+                selectedCategory === category && styles.activeCategoryButton
               ]}
               onPress={() => setSelectedCategory(category)}
             >
-              <Text style={[
-                styles.categoryText,
-                selectedCategory === category && styles.categoryTextActive
-              ]}>
+              <Ionicons 
+                name={getCategoryIcon(category) as any} 
+                size={16} 
+                color={selectedCategory === category ? "#fff" : Green} 
+                style={styles.categoryIcon}
+              />
+              <Text 
+                style={[
+                  styles.categoryText,
+                  selectedCategory === category && styles.activeCategoryText
+                ]}
+              >
                 {category}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
 
-        {/* Stats Section */}
-        <View style={styles.statsContainer}>
+        {/* Stats Overview */}
+        <View style={styles.statsOverview}>
           <View style={styles.statCard}>
+            <Ionicons name="library-outline" size={24} color={Green} />
             <Text style={styles.statNumber}>{diseases.length}</Text>
             <Text style={styles.statLabel}>Total Diseases</Text>
           </View>
           <View style={styles.statCard}>
+            <Ionicons name="warning" size={24} color="#FF4444" />
             <Text style={styles.statNumber}>{diseases.filter(d => d.severity === 'High').length}</Text>
-            <Text style={styles.statLabel}>High Severity</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{categories.length - 1}</Text>
-            <Text style={styles.statLabel}>Categories</Text>
+            <Text style={styles.statLabel}>High Risk</Text>
           </View>
         </View>
 
         {/* Disease Grid */}
-        <View style={styles.gridContainer}>
-          <FlatList
-            data={filteredDiseases}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            scrollEnabled={false}
-            ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-            columnWrapperStyle={styles.row}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.diseaseCard}
-                onPress={() => router.push(`/details/${item.id}` as any)}
-                activeOpacity={0.7}
-              >
-                {/* Disease Image */}
+        <FlatList
+          data={filteredDiseases}
+          numColumns={2}
+          keyExtractor={(item) => item.id}
+          columnWrapperStyle={styles.row}
+          scrollEnabled={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.diseaseCard}
+              onPress={() => router.push(`/details/${item.id}` as any)}
+            >
+              <View style={styles.imageSection}>
                 <View style={styles.imageContainer}>
-                  {item.image ? (
-                    <Image source={item.image} style={styles.diseaseImage} />
+                  {item.image_url ? (
+                    <Image source={{ uri: item.image_url }} style={styles.diseaseImage} />
                   ) : (
-                    <View style={styles.placeholderContainer}>
+                    <View style={styles.placeholderImage}>
                       <Ionicons 
                         name={getCategoryIcon(item.category) as any} 
                         size={40} 
-                        color={Green} 
+                        color="#ccc" 
                       />
                     </View>
                   )}
@@ -162,35 +226,34 @@ export default function AllDiseases() {
                     <Text style={styles.severityText}>{item.severity}</Text>
                   </View>
                 </View>
-
-                {/* Disease Info */}
-                <View style={styles.diseaseInfo}>
+              </View>
+              
+              <View style={styles.cardContent}>
+                <View style={styles.topContent}>
                   <Text style={styles.diseaseTitle}>{item.name}</Text>
                   <Text style={styles.diseaseCategory}>{item.category}</Text>
-                  <Text style={styles.diseaseDescription} numberOfLines={2}>
+                  <Text style={styles.diseaseDescription} numberOfLines={4}>
                     {item.description}
                   </Text>
-                  
-                  {/* Affected Crops */}
-                  <View style={styles.plantsContainer}>
-                    <Text style={styles.plantsLabel}>Affected Crops:</Text>
-                    <Text style={styles.plantsText} numberOfLines={1}>
-                      {item.affectedCrops.join(", ")}
-                    </Text>
-                  </View>
                 </View>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
+                
+                <View style={styles.cropsContainer}>
+                  <Ionicons name="leaf-outline" size={12} color="#666" />
+                  <Text style={styles.cropsText} numberOfLines={3}>
+                    {item.affectedCrops.join(", ")}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
 
-        {/* No Results */}
-        {filteredDiseases.length === 0 && (
+        {filteredDiseases.length === 0 && !loading && (
           <View style={styles.noResultsContainer}>
-            <Ionicons name="search" size={60} color="#ccc" />
-            <Text style={styles.noResultsTitle}>No diseases found</Text>
+            <Ionicons name="search-outline" size={64} color="#ccc" />
+            <Text style={styles.noResultsTitle}>No Results Found</Text>
             <Text style={styles.noResultsText}>
-              Try adjusting your search or filter criteria
+              Try adjusting your search terms or category filter
             </Text>
           </View>
         )}
@@ -209,13 +272,13 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
   },
@@ -227,33 +290,32 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flex: 1,
+    marginLeft: 15,
   },
   headerTitle: {
-    color: '#fff',
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: '#fff',
   },
   headerSubtitle: {
-    color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
-    fontWeight: '500',
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
   },
   content: {
     flex: 1,
+    padding: 20,
   },
   searchSection: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
+    marginBottom: 20,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    height: 50,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -261,7 +323,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   searchIcon: {
-    marginRight: 12,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
@@ -269,104 +331,104 @@ const styles = StyleSheet.create({
     color: DarkGreen,
   },
   clearButton: {
-    padding: 4,
+    padding: 5,
   },
   categoryContainer: {
-    paddingHorizontal: 16,
     marginBottom: 20,
   },
   categoryContent: {
-    paddingLeft: 4,
-    paddingRight: 30,
+    paddingHorizontal: 5,
   },
-  categoryChip: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginHorizontal: 4,
-    borderRadius: 20,
+  categoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: '#e0e0e0',
-  },
-  categoryChipActive: {
-    backgroundColor: Green,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginHorizontal: 5,
+    borderWidth: 1,
     borderColor: Green,
+  },
+  activeCategoryButton: {
+    backgroundColor: Green,
+  },
+  categoryIcon: {
+    marginRight: 6,
   },
   categoryText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: Green,
   },
-  categoryTextActive: {
+  activeCategoryText: {
     color: '#fff',
   },
-  statsContainer: {
+  statsOverview: {
     flexDirection: 'row',
-    paddingHorizontal: 28,
-    marginBottom: 24,
-    gap: 12,
+    justifyContent: 'space-between',
+    marginBottom: 25,
   },
   statCard: {
-    flex: 1,
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
+    flex: 1,
+    marginHorizontal: 5,
+    padding: 20,
+    borderRadius: 15,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: Green,
-    marginBottom: 4,
+    color: DarkGreen,
+    marginTop: 8,
   },
   statLabel: {
     fontSize: 12,
     color: '#666',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  gridContainer: {
-    paddingHorizontal: 28,
-    paddingBottom: 100,
-    paddingTop: 8,
+    marginTop: 4,
   },
   row: {
-    justifyContent: 'space-around',
+    justifyContent: 'space-around', // Changed from 'space-between' to 'space-around' for better spacing
+    paddingHorizontal: 5, // Add horizontal padding for consistent edge spacing
   },
   diseaseCard: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    width: (screenWidth - 72) / 2,
+    borderRadius: 15,
+    marginBottom: 15,
+    width: CARD_WIDTH,
+    minHeight: 280, // Changed from fixed height to minHeight to allow flexibility
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
-    marginBottom: 12,
+    overflow: 'hidden',
   },
-  imageContainer: {
+  imageSection: {
     height: 120,
     position: 'relative',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    overflow: 'hidden',
+  },
+  imageContainer: {
+    flex: 1,
+    position: 'relative',
   },
   diseaseImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  placeholderContainer: {
+  placeholderImage: {
     width: '100%',
     height: '100%',
-    backgroundColor: OffWhite,
-    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   severityBadge: {
     position: 'absolute',
@@ -374,15 +436,20 @@ const styles = StyleSheet.create({
     right: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   severityText: {
-    color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
+    color: '#fff',
   },
-  diseaseInfo: {
-    padding: 16,
+  cardContent: {
+    padding: 14, // Increased from 12 to give more breathing room
+    flex: 1, // Allow content to expand
+    justifyContent: 'space-between', // Distribute space to push crops to bottom
+  },
+  topContent: {
+    flexShrink: 1, // Allow this section to shrink if needed
   },
   diseaseTitle: {
     fontSize: 16,
@@ -394,29 +461,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Green,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   diseaseDescription: {
-    fontSize: 13,
+    fontSize: 13, // Increased from 12 for better readability
     color: '#666',
-    lineHeight: 18,
-    marginBottom: 12,
+    lineHeight: 18, // Increased from 16 for better spacing
+    marginBottom: 8,
+    maxHeight: 90, // Changed from minHeight to maxHeight to prevent overflow
   },
-  plantsContainer: {
-    borderTopWidth: 1,
+  cropsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8, // Add some space above the crops section
+    paddingTop: 8, // Add padding to separate from description
+    borderTopWidth: 1, // Add a subtle border to visually separate
     borderTopColor: '#f0f0f0',
-    paddingTop: 8,
   },
-  plantsLabel: {
+  cropsText: {
     fontSize: 11,
-    color: '#888',
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  plantsText: {
-    fontSize: 12,
     color: '#666',
-    fontStyle: 'italic',
+    marginLeft: 4,
+    flex: 1,
   },
   noResultsContainer: {
     alignItems: 'center',
@@ -436,5 +502,17 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: DarkGreen,
+    marginTop: 16,
+    textAlign: 'center',
   },
 });

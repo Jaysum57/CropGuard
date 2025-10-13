@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
-import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getDiseaseById } from "../../components/DiseaseData";
+import { DiseaseData, getDiseaseById } from "../../components/DiseaseData";
 
 const { width } = Dimensions.get('window');
 const Green = "#30BE63";
@@ -16,16 +16,55 @@ const Red = "#E53E3E";
 export default function DiseaseDetail() {
   const router = useRouter();
   const { diseaseId } = useLocalSearchParams<{ diseaseId: string }>();
-  
-  const diseaseData = getDiseaseById(diseaseId || "");
+  const [diseaseData, setDiseaseData] = useState<DiseaseData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!diseaseData) {
+  useEffect(() => {
+    const loadDiseaseData = async () => {
+      if (!diseaseId) {
+        setError("No disease ID provided");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const data = await getDiseaseById(diseaseId);
+        if (data) {
+          setDiseaseData(data);
+        } else {
+          setError("Disease not found");
+        }
+      } catch (err) {
+        console.error("Error loading disease:", err);
+        setError("Failed to load disease data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDiseaseData();
+  }, [diseaseId]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Green} />
+          <Text style={styles.loadingText}>Loading disease information...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !diseaseData) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Ionicons name="warning-outline" size={64} color={Red} />
           <Text style={styles.errorTitle}>Disease Not Found</Text>
-          <Text style={styles.errorText}>The requested disease information could not be found.</Text>
+          <Text style={styles.errorText}>{error || "The requested disease information could not be found."}</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.errorButton}>
             <Text style={styles.errorButtonText}>Go Back</Text>
           </TouchableOpacity>
@@ -73,7 +112,7 @@ export default function DiseaseDetail() {
         <View style={styles.heroSection}>
           <View style={styles.imageContainer}>
             <Image
-              source={diseaseData.image}
+              source={{ uri: diseaseData.image_url }}
               style={styles.diseaseImage}
             />
             <View style={styles.imageOverlay}>
@@ -88,54 +127,56 @@ export default function DiseaseDetail() {
         </View>
 
         {/* Quick Stats Dashboard */}
-        <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>Disease Overview</Text>
-          <View style={styles.modernStatsGrid}>
-            <View style={styles.modernStatCard}>
-              <View style={[styles.statIconContainer, { backgroundColor: getSeverityBadgeColor(diseaseData.severity) }]}>
-                <Ionicons name="warning" size={20} color="#fff" />
+        {diseaseData.quickStats && (
+          <View style={styles.statsContainer}>
+            <Text style={styles.sectionTitle}>Disease Overview</Text>
+            <View style={styles.modernStatsGrid}>
+              <View style={styles.modernStatCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: getSeverityBadgeColor(diseaseData.severity) }]}>
+                  <Ionicons name="warning" size={20} color="#fff" />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statCategory}>Risk Level</Text>
+                  <Text style={styles.statMainValue}>{diseaseData.quickStats.severity.level}</Text>
+                  <Text style={styles.statScore}>{diseaseData.quickStats.severity.score}</Text>
+                </View>
               </View>
-              <View style={styles.statContent}>
-                <Text style={styles.statCategory}>Risk Level</Text>
-                <Text style={styles.statMainValue}>{diseaseData.quickStats.severity.level}</Text>
-                <Text style={styles.statScore}>{diseaseData.quickStats.severity.score}</Text>
+              
+              <View style={styles.modernStatCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: Orange }]}>
+                  <Ionicons name="flash" size={20} color="#fff" />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statCategory}>Spread Rate</Text>
+                  <Text style={styles.statMainValue}>{diseaseData.quickStats.transmission.level}</Text>
+                  <Text style={styles.statScore}>{diseaseData.quickStats.transmission.score}</Text>
+                </View>
               </View>
-            </View>
-            
-            <View style={styles.modernStatCard}>
-              <View style={[styles.statIconContainer, { backgroundColor: Orange }]}>
-                <Ionicons name="flash" size={20} color="#fff" />
+              
+              <View style={styles.modernStatCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: Green }]}>
+                  <Ionicons name="medical" size={20} color="#fff" />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statCategory}>Treatment</Text>
+                  <Text style={styles.statMainValue}>{diseaseData.quickStats.treatment.level}</Text>
+                  <Text style={styles.statScore}>{diseaseData.quickStats.treatment.score}</Text>
+                </View>
               </View>
-              <View style={styles.statContent}>
-                <Text style={styles.statCategory}>Spread Rate</Text>
-                <Text style={styles.statMainValue}>{diseaseData.quickStats.transmission.level}</Text>
-                <Text style={styles.statScore}>{diseaseData.quickStats.transmission.score}</Text>
-              </View>
-            </View>
-            
-            <View style={styles.modernStatCard}>
-              <View style={[styles.statIconContainer, { backgroundColor: Green }]}>
-                <Ionicons name="medical" size={20} color="#fff" />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={styles.statCategory}>Treatment</Text>
-                <Text style={styles.statMainValue}>{diseaseData.quickStats.treatment.level}</Text>
-                <Text style={styles.statScore}>{diseaseData.quickStats.treatment.score}</Text>
-              </View>
-            </View>
-            
-            <View style={styles.modernStatCard}>
-              <View style={[styles.statIconContainer, { backgroundColor: Red }]}>
-                <Ionicons name="trending-down" size={20} color="#fff" />
-              </View>
-              <View style={styles.statContent}>
-                <Text style={styles.statCategory}>Impact</Text>
-                <Text style={styles.statMainValue}>{diseaseData.quickStats.impact.level}</Text>
-                <Text style={styles.statScore}>{diseaseData.quickStats.impact.score}</Text>
+              
+              <View style={styles.modernStatCard}>
+                <View style={[styles.statIconContainer, { backgroundColor: Red }]}>
+                  <Ionicons name="trending-down" size={20} color="#fff" />
+                </View>
+                <View style={styles.statContent}>
+                  <Text style={styles.statCategory}>Impact</Text>
+                  <Text style={styles.statMainValue}>{diseaseData.quickStats.impact.level}</Text>
+                  <Text style={styles.statScore}>{diseaseData.quickStats.impact.score}</Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Affected Crops */}
         <View style={styles.section}>
@@ -599,5 +640,17 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: DarkGreen,
+    marginTop: 16,
+    textAlign: "center",
   },
 });
