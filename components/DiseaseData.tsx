@@ -8,7 +8,7 @@ export interface DiseaseData {
   description: string;
   affectedCrops: string[];
   image: any;
-  quickStats: {
+  quickStats?: {
     severity: { level: string; score: string };
     transmission: { level: string; score: string };
     treatment: { level: string; score: string };
@@ -17,33 +17,36 @@ export interface DiseaseData {
   symptoms: Array<{
     title: string;
     description: string;
-    severity: "critical" | "high" | "moderate" | "low";
-    icon: string;
+    severity?: "critical" | "high" | "moderate" | "low";
+    icon?: string;
   }>;
-  causes: Array<{
+  causes?: Array<{
     title: string;
     description: string;
   }>;
-  prevention: Array<{
+  prevention?: Array<{
     title: string;
     description: string;
     icon: string;
     difficulty?: string;
   }>;
-  treatments: Array<{
+  treatments?: Array<{
     title: string;
     description: string;
     icon: string;
     effectiveness: string;
   }>;
+  page?: string;
 }
+
+export const categories = ["All", "Fungal", "Bacterial", "Viral", "Pest"];
 
 export const diseaseDatabase: Record<string, DiseaseData> = {
   scab: {
     id: "scab",
     name: "Scab",
     severity: "Medium",
-    category: "Fungal Disease",
+    category: "Fungal",
     description: "A fungal disease that causes dark, rough lesions on leaves, fruit, or stems, reducing quality and yield.",
     affectedCrops: ["Apple", "Pear", "Potato", "Cucumber"],
     image: images.scab,

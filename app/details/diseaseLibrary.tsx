@@ -13,7 +13,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categories, diseases } from "../../components/DiseaseLibraryData";
+import { categories, diseaseDatabase } from "../../components/DiseaseData";
 
 const screenWidth = Dimensions.get("window").width;
 const CARD_WIDTH = screenWidth * 0.45;
@@ -22,13 +22,15 @@ const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 const Yellow = "#FFD94D";
 
+const diseases = Object.values(diseaseDatabase);
+
 export default function AllDiseases() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
   const filteredDiseases = diseases.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
                          item.description.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -132,7 +134,7 @@ export default function AllDiseases() {
         <View style={styles.gridContainer}>
           <FlatList
             data={filteredDiseases}
-            keyExtractor={(item) => item.title}
+            keyExtractor={(item) => item.id}
             numColumns={2}
             scrollEnabled={false}
             ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
@@ -140,7 +142,7 @@ export default function AllDiseases() {
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.diseaseCard}
-                onPress={() => router.push("/details/rust")}
+                onPress={() => router.push(item.page || `/details/${item.id}` as any)}
                 activeOpacity={0.7}
               >
                 {/* Disease Image */}
@@ -163,17 +165,17 @@ export default function AllDiseases() {
 
                 {/* Disease Info */}
                 <View style={styles.diseaseInfo}>
-                  <Text style={styles.diseaseTitle}>{item.title}</Text>
+                  <Text style={styles.diseaseTitle}>{item.name}</Text>
                   <Text style={styles.diseaseCategory}>{item.category}</Text>
                   <Text style={styles.diseaseDescription} numberOfLines={2}>
                     {item.description}
                   </Text>
                   
-                  {/* Common Plants */}
+                  {/* Affected Crops */}
                   <View style={styles.plantsContainer}>
-                    <Text style={styles.plantsLabel}>Common on:</Text>
+                    <Text style={styles.plantsLabel}>Affected Crops:</Text>
                     <Text style={styles.plantsText} numberOfLines={1}>
-                      {item.commonOn.join(", ")}
+                      {item.affectedCrops.join(", ")}
                     </Text>
                   </View>
                 </View>
