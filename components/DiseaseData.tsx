@@ -36,7 +36,6 @@ export interface DiseaseData {
     icon: string;
     effectiveness: string;
   }>;
-  page?: string;
 }
 
 export const categories = ["All", "Fungal", "Bacterial", "Viral", "Pest"];
