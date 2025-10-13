@@ -142,7 +142,7 @@ export default function AllDiseases() {
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.diseaseCard}
-                onPress={() => router.push(item.page || `/details/${item.id}` as any)}
+                onPress={() => router.push(`/details/${item.id}` as any)}
                 activeOpacity={0.7}
               >
                 {/* Disease Image */}
