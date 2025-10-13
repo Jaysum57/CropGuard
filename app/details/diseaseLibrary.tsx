@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dimensions,
   FlatList,
@@ -10,10 +10,12 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categories, diseaseDatabase } from "../../components/DiseaseData";
+import { categories } from "../../components/DiseaseData";
+import { supabase } from "../../lib/supabase";
 
 const screenWidth = Dimensions.get("window").width;
 const CARD_WIDTH = screenWidth * 0.45;
@@ -22,17 +24,70 @@ const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 const Yellow = "#FFD94D";
 
-const diseases = Object.values(diseaseDatabase);
+interface Disease {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  severity: 'High' | 'Medium' | 'Low';
+  affectedCrops: string[];
+  image_url: string; // Updated to match database
+  page?: string;
+}
 
-export default function AllDiseases() {
+const AllDiseases = () => {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [diseases, setDiseases] = useState<Disease[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // ADDED: Fetch data when the component mounts
+  useEffect(() => {
+    fetchDiseases();
+  }, []);
+
+  const fetchDiseases = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('disease_data')
+        .select('*');
+
+      if (error) {
+        console.error('Error fetching diseases:', error);
+        return;
+      }
+
+      // 🛑 FIX APPLIED HERE:
+      // The Supabase client returns affected_crops as a JavaScript array (string[]),
+      // so we should stop trying to parse it as a string.
+      const formattedDiseases = data.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        description: d.description,
+        category: d.category,
+        severity: d.severity,
+        // Direct assignment: Use the fetched array or an empty array as fallback
+        affectedCrops: (d.affected_crops || []) as string[], 
+        image_url: d.image_url,
+        page: d.page,
+      })) as Disease[];
+
+      setDiseases(formattedDiseases);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ... (rest of the component logic remains the same)
 
   const filteredDiseases = diseases.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
-                         item.description.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
+                          item.description.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = selectedCategory === "All" || item.category.toLowerCase().includes(selectedCategory.toLowerCase());
     return matchesSearch && matchesCategory;
   });
 
@@ -69,130 +124,142 @@ export default function AllDiseases() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Search Section */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search diseases, symptoms..."
-              value={search}
-              onChangeText={setSearch}
-              placeholderTextColor="#999"
-            />
-            {search.length > 0 && (
-              <TouchableOpacity onPress={() => setSearch("")} style={styles.clearButton}>
-                <Ionicons name="close-circle" size={20} color="#999" />
-              </TouchableOpacity>
-            )}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Green} />
+            <Text style={styles.loadingText}>Loading diseases...</Text>
           </View>
-        </View>
+        ) : (
+          <>
+            {/* Search Section */}
+            <View style={styles.searchSection}>
+              <View style={styles.searchContainer}>
+                <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search diseases, symptoms..."
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholderTextColor="#999"
+                />
+                {search.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearch("")} style={styles.clearButton}>
+                    <Ionicons name="close-circle" size={20} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
 
-        {/* Category Filter */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          style={styles.categoryContainer}
-          contentContainerStyle={styles.categoryContent}
-        >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              style={[
-                styles.categoryChip,
-                selectedCategory === category && styles.categoryChipActive
-              ]}
-              onPress={() => setSelectedCategory(category)}
+            {/* Category Filter */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.categoryContainer}
+              contentContainerStyle={styles.categoryContent}
             >
-              <Text style={[
-                styles.categoryText,
-                selectedCategory === category && styles.categoryTextActive
-              ]}>
-                {category}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Stats Section */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{diseases.length}</Text>
-            <Text style={styles.statLabel}>Total Diseases</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{diseases.filter(d => d.severity === 'High').length}</Text>
-            <Text style={styles.statLabel}>High Severity</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{categories.length - 1}</Text>
-            <Text style={styles.statLabel}>Categories</Text>
-          </View>
-        </View>
-
-        {/* Disease Grid */}
-        <View style={styles.gridContainer}>
-          <FlatList
-            data={filteredDiseases}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            scrollEnabled={false}
-            ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-            columnWrapperStyle={styles.row}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.diseaseCard}
-                onPress={() => router.push(item.page || `/details/${item.id}` as any)}
-                activeOpacity={0.7}
-              >
-                {/* Disease Image */}
-                <View style={styles.imageContainer}>
-                  {item.image ? (
-                    <Image source={item.image} style={styles.diseaseImage} />
-                  ) : (
-                    <View style={styles.placeholderContainer}>
-                      <Ionicons 
-                        name={getCategoryIcon(item.category) as any} 
-                        size={40} 
-                        color={Green} 
-                      />
-                    </View>
-                  )}
-                  <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
-                    <Text style={styles.severityText}>{item.severity}</Text>
-                  </View>
-                </View>
-
-                {/* Disease Info */}
-                <View style={styles.diseaseInfo}>
-                  <Text style={styles.diseaseTitle}>{item.name}</Text>
-                  <Text style={styles.diseaseCategory}>{item.category}</Text>
-                  <Text style={styles.diseaseDescription} numberOfLines={2}>
-                    {item.description}
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category}
+                  style={[
+                    styles.categoryChip,
+                    selectedCategory === category && styles.categoryChipActive
+                  ]}
+                  onPress={() => setSelectedCategory(category)}
+                >
+                  <Text style={[
+                    styles.categoryText,
+                    selectedCategory === category && styles.categoryTextActive
+                  ]}>
+                    {category}
                   </Text>
-                  
-                  {/* Affected Crops */}
-                  <View style={styles.plantsContainer}>
-                    <Text style={styles.plantsLabel}>Affected Crops:</Text>
-                    <Text style={styles.plantsText} numberOfLines={1}>
-                      {item.affectedCrops.join(", ")}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
-        </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-        {/* No Results */}
-        {filteredDiseases.length === 0 && (
-          <View style={styles.noResultsContainer}>
-            <Ionicons name="search" size={60} color="#ccc" />
-            <Text style={styles.noResultsTitle}>No diseases found</Text>
-            <Text style={styles.noResultsText}>
-              Try adjusting your search or filter criteria
-            </Text>
-          </View>
+            {/* Stats Section */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>{diseases.length}</Text>
+                <Text style={styles.statLabel}>Total Diseases</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>{diseases.filter(d => d.severity === 'High').length}</Text>
+                <Text style={styles.statLabel}>High Severity</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>{categories.length - 1}</Text>
+                <Text style={styles.statLabel}>Categories</Text>
+              </View>
+            </View>
+
+            {/* Disease Grid */}
+            <View style={styles.gridContainer}>
+              <FlatList
+                data={filteredDiseases}
+                keyExtractor={(item) => item.id}
+                numColumns={2}
+                scrollEnabled={false}
+                ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+                columnWrapperStyle={styles.row}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.diseaseCard}
+                    onPress={() => router.push(item.page || `/details/${item.id}` as any)}
+                    activeOpacity={0.7}
+                  >
+                    {/* Disease Image */}
+                    <View style={styles.imageContainer}>
+                      {item.image_url ? ( 
+                        <Image 
+                          source={{ uri: item.image_url }} 
+                          style={styles.diseaseImage} 
+                        />
+                      ) : (
+                        <View style={styles.placeholderContainer}>
+                          <Ionicons 
+                            name={getCategoryIcon(item.category) as any} 
+                            size={40} 
+                            color={Green} 
+                          />
+                        </View>
+                      )}
+                      <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
+                        <Text style={styles.severityText}>{item.severity}</Text>
+                      </View>
+                    </View>
+
+                    {/* Disease Info */}
+                    <View style={styles.diseaseInfo}>
+                      <Text style={styles.diseaseTitle}>{item.name}</Text>
+                      <Text style={styles.diseaseCategory}>{item.category}</Text>
+                      <Text style={styles.diseaseDescription} numberOfLines={2}>
+                        {item.description}
+                      </Text>
+                      
+                      {/* Affected Crops */}
+                      <View style={styles.plantsContainer}>
+                        <Text style={styles.plantsLabel}>Affected Crops:</Text>
+                        <Text style={styles.plantsText} numberOfLines={1}>
+                          {item.affectedCrops.join(", ")}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+
+            {/* No Results */}
+            {filteredDiseases.length === 0 && (
+              <View style={styles.noResultsContainer}>
+                <Ionicons name="search" size={60} color="#ccc" />
+                <Text style={styles.noResultsTitle}>No diseases found</Text>
+                <Text style={styles.noResultsText}>
+                  Try adjusting your search or filter criteria
+                </Text>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -200,6 +267,18 @@ export default function AllDiseases() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    minHeight: 300,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
   container: {
     flex: 1,
     backgroundColor: OffWhite,
@@ -438,3 +517,5 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 });
+
+export default AllDiseases;
