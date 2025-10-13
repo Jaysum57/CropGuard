@@ -1,8 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
-import React, { useState, useEffect, useContext } from "react"; // ADDED: useState, useEffect, useContext
-import { supabase } from '../../lib/supabase'; // ADDED: supabase import
-import { SessionContext } from './_layout'; // ADDED: SessionContext import
+import React, { useContext, useEffect, useState } from "react"; // ADDED: useState, useEffect, useContext
 import {
   Dimensions,
   FlatList,
@@ -16,6 +14,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getAllDiseases } from "../../components/DiseaseData";
+import { supabase } from '../../lib/supabase'; // ADDED: supabase import
+import { SessionContext } from './_layout'; // ADDED: SessionContext import
 
 const screenWidth = Dimensions.get("window").width;
 const CARD_WIDTH = screenWidth * 0.7;
@@ -38,6 +38,8 @@ type Disease = {
   tag: string;
   severity: "Low" | "Medium" | "High";
   color: string;
+};
+
 const severityColors = {
   Low: "#38A169",    // Green
   Medium: "#FF8C00", // Orange
