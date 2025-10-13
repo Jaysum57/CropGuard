@@ -13,6 +13,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { categories, diseases } from "../../components/DiseaseLibraryData";
 
 const screenWidth = Dimensions.get("window").width;
 const CARD_WIDTH = screenWidth * 0.45;
@@ -20,77 +21,6 @@ const Green = "#30BE63";
 const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 const Yellow = "#FFD94D";
-
-interface Disease {
-  title: string;
-  description: string;
-  image?: any;
-  page: string;
-  category: string;
-  severity: 'Low' | 'Medium' | 'High';
-  commonOn: string[];
-  symptoms: string[];
-}
-
-const diseases: Disease[] = [
-  {
-    title: "Aphid Infestation",
-    description: "Small insects that suck plant sap and spread viruses.",
-    page: "/details/rust",
-    category: "Pest",
-    severity: "Low",
-    commonOn: ["Roses", "Cabbage", "Beans"],
-    symptoms: ["Sticky honeydew", "Curled leaves", "Stunted growth"]
-  },
-  {
-    title: "Blight",
-    description: "Rapid browning and death of plant tissues.",
-    page: "/details/rust",
-    category: "Fungal",
-    severity: "High",
-    commonOn: ["Potatoes", "Tomatoes", "Peppers"],
-    symptoms: ["Rapid browning", "Wilting", "Black lesions"]
-  },
-  {
-    title: "Leaf Spot",
-    description: "Circular dark spots caused by fungal or bacterial infection.",
-    page: "/details/rust",
-    category: "Bacterial",
-    severity: "Medium",
-    commonOn: ["Tomatoes", "Peppers", "Lettuce"],
-    symptoms: ["Dark circular spots", "Leaf yellowing", "Premature leaf drop"]
-  },
-  {
-    title: "Powdery Mildew",
-    description: "White powdery fungus that affects leaf surfaces.",
-    page: "/details/rust",
-    category: "Fungal",
-    severity: "Medium",
-    commonOn: ["Grapes", "Roses", "Cucumbers"],
-    symptoms: ["White powder coating", "Leaf curling", "Reduced photosynthesis"]
-  },
-  {
-    title: "Root Rot",
-    description: "Fungal infection affecting plant root systems.",
-    page: "/details/rust",
-    category: "Fungal",
-    severity: "High",
-    commonOn: ["Houseplants", "Trees", "Vegetables"],
-    symptoms: ["Wilting", "Yellow leaves", "Musty smell"]
-  },
-  {
-    title: "Rust",
-    description: "Fungal disease causing orange-brown pustules on leaves.",
-    image: require("../../assets/images/rust.jpg"),
-    page: "/details/rust",
-    category: "Fungal",
-    severity: "High",
-    commonOn: ["Wheat", "Corn", "Beans"],
-    symptoms: ["Orange pustules", "Leaf yellowing", "Stunted growth"]
-  },
-];
-
-const categories = ["All", "Fungal", "Bacterial", "Viral", "Pest"];
 
 export default function AllDiseases() {
   const router = useRouter();
