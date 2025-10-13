@@ -112,9 +112,9 @@ export default function AuthScreen() {
             password: password,
             options: {
                 data: {
-                    // Pass the full name to the user's metadata, which your SQL trigger
-                    // can read to populate the 'profiles' table.
-                    full_name: fullName.trim()
+                    // Now passing first_name and last_name separately
+                    first_name: firstName.trim(),
+                    last_name: lastName.trim(),
                 }
             }
         });

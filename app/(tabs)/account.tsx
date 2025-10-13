@@ -19,7 +19,8 @@ const LightGreen = "#E6F9EF";
 
 // Define the structure for the profile data we will fetch
 interface Profile {
-    full_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
     username: string | null;
     website: string | null;
     avatar_url: string | null;
@@ -53,6 +54,16 @@ export default function Account() {
           })
         : 'N/A';
     
+    const getDisplayName = () => {
+        const first = profile?.first_name;
+        const last = profile?.last_name;
+
+        if (first && last) return `${first} ${last}`;
+        if (first) return first;
+        if (last) return last;
+        
+        return profile?.username || 'New User';
+    };
     /**
      * Fetches the user's profile data from the 'profiles' table.
      */
@@ -67,7 +78,7 @@ export default function Account() {
 
             const { data, error, status } = await supabase
                 .from('profiles')
-                .select(`full_name, username, website, avatar_url`) 
+                .select(`first_name, last_name, username, website, avatar_url`) 
                 .eq('id', session.user.id)
                 .single();
 
@@ -173,7 +184,7 @@ export default function Account() {
                         <Ionicons name="person" size={40} color={Green} />
                     </View>
                     {/* Display actual full name or username */}
-                    <Text style={styles.userName}>{profile?.full_name || profile?.username || 'New User'}</Text>
+                    <Text style={styles.userName}>{getDisplayName()}</Text>
                     <Text style={styles.userEmail}>{session.user.email}</Text>
                     <Text style={styles.joinDate}>Member since {joinDate}</Text>
                 </View>
@@ -215,8 +226,7 @@ export default function Account() {
                     <View style={styles.infoCard}>
                         <Ionicons name="person-outline" size={24} color={Green} />
                         <View style={styles.infoContent}>
-                            <Text style={styles.infoLabel}>Full Name</Text>
-                            <Text style={styles.infoValue}>{profile?.full_name || 'Not set'}</Text>
+                            <Text style={styles.infoValue}>{getDisplayName() || 'Not set'}</Text>
                         </View>
                         <TouchableOpacity onPress={handleEditProfile}>
                             <Ionicons name="chevron-forward" size={20} color="#999" />

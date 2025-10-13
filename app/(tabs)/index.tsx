@@ -26,7 +26,7 @@ const DarkGreen = "#021A1A";
 
 // Define the structure for the profile data we will fetch
 interface Profile {
-    full_name: string | null;
+    first_name: string | null;
     username: string | null;
 }
 
@@ -109,22 +109,26 @@ export default function Index() {
       try {
           const { data, error } = await supabase
               .from('profiles')
-              .select(`full_name, username`) 
-              .eq('id', session.user.id)
-              .single();
+              .select(`first_name, username`) 
+              .eq('id', session.user.id);
 
           if (error) {
               console.error("Error fetching profile for index:", error.message);
+              setProfile(null);
+              return;
           }
 
-          if (data) {
-              setProfile(data as Profile);
+          // Check if we got any results
+          if (data && data.length > 0) {
+              setProfile(data[0] as Profile);
           } else {
+              // No profile found - this is a valid case for new users
               setProfile(null);
           }
       } catch (error) {
           if (error instanceof Error) {
               console.error('Error in getProfile:', error.message);
+              setProfile(null);
           }
       } finally {
           setLoadingProfile(false);
@@ -145,7 +149,7 @@ export default function Index() {
 
   // 6. Determine the user's display name
   const userName = 
-    profile?.full_name || 
+    profile?.first_name || 
     profile?.username || 
     session?.user.email?.split('@')[0] || // Use part of the email as a robust fallback
     (isSessionLoading || loadingProfile ? "Loading" : "New User");
