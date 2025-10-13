@@ -1,12 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState, useEffect, useContext } from "react"; 
-import { supabase } from '../../lib/supabase'; 
-import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from 'expo-router'; // 1. Import useRouter
+import React, { useContext, useEffect, useState } from "react";
+import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { supabase } from '../../lib/supabase';
 
 // Import SessionContext from the layout file
 import { SessionContext } from './_layout';
-import { OnboardingManager } from '../../components/AppStateProvider';
 
 
 // Responsive sizing
@@ -119,10 +118,8 @@ export default function Account() {
                             if (error) throw error;
                             console.log("User successfully signed out");
                             
-                            // 3. Redirect the user to the sign-in page upon successful sign out.
-                            // We use '/auth' here, assuming your route file is app/auth.tsx or app/(auth)/index.tsx,
-                            // which renders the logic from components/AuthScreen.tsx.
-                            router.replace('/auth'); 
+                            // Navigation will be handled automatically by the auth state listener in _layout.tsx
+                            // No need for manual router.replace('/auth') here
 
                         } catch (error) {
                             console.error("Logout Error:", error);
@@ -142,44 +139,6 @@ export default function Account() {
     const handleSettings = () => {
         Alert.alert("Feature", "Navigating to Settings...");
     };
-
-    const handleResetOnboarding = () => {
-        Alert.alert(
-            "Reset Onboarding",
-            "This will show the onboarding screens again when you restart the app. Continue?",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Reset",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            await OnboardingManager.resetOnboarding();
-                            Alert.alert(
-                                "Success", 
-                                "Onboarding has been reset. Restart the app to see the onboarding screens again.",
-                                [
-                                    {
-                                        text: "Restart App",
-                                        onPress: () => {
-                                            if (__DEV__) {
-                                                // @ts-ignore
-                                                window.location.reload();
-                                            }
-                                        }
-                                    },
-                                    { text: "OK" }
-                                ]
-                            );
-                        } catch (error) {
-                            Alert.alert("Error", "Failed to reset onboarding.");
-                        }
-                    },
-                },
-            ],
-            { cancelable: true }
-        );
-    };
     
     // 1. Show a basic loading indicator while profile data is being fetched, or if initial session check is running
     if (isSessionLoading || loadingProfile) {
@@ -190,12 +149,14 @@ export default function Account() {
         );
     }
     
-    // 2. Display if no session exists (or if session was null upon mount)
+    // 2. Since tabs layout now protects against unauthenticated access, 
+    // we can safely assume session exists at this point
     if (!session) {
+        // This should not happen due to tabs layout protection, but keeping as fallback
         return (
              <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
                 <Text style={{ color: DarkGreen, fontSize: 18, textAlign: 'center' }}>
-                    Authentication Error: You are currently signed out. Please navigate to the Sign-In screen.
+                    Loading authentication...
                 </Text>
             </View>
         );
@@ -321,11 +282,6 @@ export default function Account() {
                     <TouchableOpacity style={styles.settingsButton} onPress={handleSettings}>
                         <Ionicons name="settings-outline" size={20} color={DarkGreen} />
                         <Text style={styles.settingsButtonText}>Settings & Privacy</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.resetButton} onPress={handleResetOnboarding}>
-                        <Ionicons name="refresh-outline" size={20} color="#FF8C00" />
-                        <Text style={styles.resetButtonText}>Reset Onboarding</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -532,29 +488,6 @@ const styles = StyleSheet.create({
         color: "#fff",
         fontSize: 16,
         fontWeight: "bold",
-        marginLeft: 8,
-    },
-    resetButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "#fff",
-        borderRadius: 16,
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        marginBottom: 12,
-        elevation: 2,
-        shadowColor: "#000",
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 },
-        borderWidth: 1,
-        borderColor: "#FF8C00",
-    },
-    resetButtonText: {
-        color: "#FF8C00",
-        fontSize: 16,
-        fontWeight: "600",
         marginLeft: 8,
     },
     footer: {

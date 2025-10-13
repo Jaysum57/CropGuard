@@ -1,19 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    AppState, // Keep AppState import
+  Alert,
+  AppState,
+  Dimensions,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { OnboardingManager } from '../components/AppStateProvider';
 // Ensure this path to your supabase client is correct
-import { supabase } from '../lib/supabase'; 
+import { supabase } from '../lib/supabase';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -39,7 +40,36 @@ export default function AuthScreen() {
     const [lastName, setLastName] = useState('');
     
     // 2. NEW: Loading state from the tutorial code
-    const [loading, setLoading] = useState(false); 
+    const [loading, setLoading] = useState(false);
+    const [checkingAuth, setCheckingAuth] = useState(true);
+
+    // Check if user is already authenticated when component mounts
+    useEffect(() => {
+        async function checkAuthStatus() {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session) {
+                    // User is already authenticated, redirect to tabs
+                    router.replace('/(tabs)');
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            } finally {
+                setCheckingAuth(false);
+            }
+        }
+
+        checkAuthStatus();
+    }, []);
+
+    // Show loading while checking authentication status
+    if (checkingAuth) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ fontSize: 18, color: '#021A1A' }}>Checking authentication...</Text>
+            </View>
+        );
+    } 
 
 
     // 3. INTEGRATE SUPABASE SIGN IN
@@ -56,9 +86,7 @@ export default function AuthScreen() {
         if (error) {
             Alert.alert('Sign In Error', error.message);
         } else {
-            // Success: Session established, no need for manual navigation
-            // The root layout should handle navigation based on the session state
-            // If the router is used, it should be router.replace('/(tabs)')
+            // Success: Session established, navigate to tabs immediately for better UX
             router.replace('/(tabs)');
         }
     }
@@ -98,7 +126,7 @@ export default function AuthScreen() {
         } else if (!session) {
             Alert.alert('Verification Required', 'Please check your inbox for the email verification link!');
         } else {
-            // Success: Session established, navigate to main app
+            // Success: Session established, navigate to tabs immediately for better UX
             router.replace('/(tabs)');
         }
     }
@@ -119,6 +147,44 @@ export default function AuthScreen() {
         }
     };
 
+    // Reset onboarding function for testing
+    const handleResetOnboarding = () => {
+        Alert.alert(
+            "Reset Onboarding",
+            "This will show the onboarding screens again when you restart the app. Continue?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Reset",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            await OnboardingManager.resetOnboarding();
+                            Alert.alert(
+                                "Success", 
+                                "Onboarding has been reset. Restart the app to see the onboarding screens again.",
+                                [
+                                    {
+                                        text: "Restart App",
+                                        onPress: () => {
+                                            if (__DEV__) {
+                                                // @ts-ignore
+                                                window.location.reload();
+                                            }
+                                        }
+                                    },
+                                    { text: "OK" }
+                                ]
+                            );
+                        } catch (error) {
+                            Alert.alert("Error", "Failed to reset onboarding.");
+                        }
+                    },
+                },
+            ],
+            { cancelable: true }
+        );
+    };
 
     const toggleAuthMode = () => {
         setIsLogin(!isLogin);
@@ -134,14 +200,7 @@ export default function AuthScreen() {
             <View style={styles.container}>
                 <SafeAreaView style={styles.safeArea}>
                     <View style={styles.header}>
-                        <TouchableOpacity 
-                            style={styles.backButton}
-                            onPress={() => router.back()}
-                            activeOpacity={0.7}
-                            disabled={loading} // Disable button while loading
-                        >
-                            <Ionicons name="arrow-back" size={24} color="#333" />
-                        </TouchableOpacity>
+                        {/* Removed back button since auth screen is now the entry point for unauthenticated users */}
                         
                         <View style={styles.logoContainer}>
                             <View style={styles.logoIcon}>
@@ -284,6 +343,16 @@ export default function AuthScreen() {
                                     </Text>
                                 </TouchableOpacity>
                             </View>
+
+                            {/* Reset Onboarding Button for Testing */}
+                            <TouchableOpacity 
+                                style={styles.resetOnboardingButton} 
+                                onPress={handleResetOnboarding}
+                                disabled={loading}
+                            >
+                                <Ionicons name="refresh-outline" size={16} color="#FF8C00" />
+                                <Text style={styles.resetOnboardingText}>Reset Onboarding (Testing)</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </SafeAreaView>
@@ -320,7 +389,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 40, // Offset back button width
+        // Removed marginRight since there's no back button to offset
     },
     logoIcon: {
         width: 40,
@@ -456,5 +525,23 @@ const styles = StyleSheet.create({
         color: '#30BE63',
         fontSize: 14,
         fontWeight: '600',
+    },
+    resetOnboardingButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFF3E0',
+        borderRadius: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        marginTop: 16,
+        borderWidth: 1,
+        borderColor: '#FFE0B3',
+        gap: 6,
+    },
+    resetOnboardingText: {
+        color: '#FF8C00',
+        fontSize: 12,
+        fontWeight: '500',
     },
 });
