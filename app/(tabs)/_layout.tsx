@@ -1,7 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+// --- Added Supabase and Session Imports ---
+import { supabase } from '../../lib/supabase';
+import { Session } from '@supabase/supabase-js'; 
+
+// Removed the import for './account' since it's now loaded by file convention
 
 const Green = '#30BE63';
 const OffWhite = '#F6F6F6';
@@ -9,6 +15,19 @@ const DarkGreen = '#021a09ff';
 
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import type { Route } from '@react-navigation/native';
+
+// --- 1. DEFINE SESSION CONTEXT ---
+interface SessionContextType {
+  session: Session | null;
+  isLoading: boolean; // Indicates if the initial auth check is still running
+}
+
+export const SessionContext = React.createContext<SessionContextType>({
+    session: null,
+    isLoading: true, 
+});
+// --- END CONTEXT DEFINITION ---
+
 
 const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
   return (
@@ -27,7 +46,7 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
             });
 
             if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
+              navigation.navigate(route.name as any); // Use 'as any' if necessary for type safety in native
             }
           };
 
@@ -92,28 +111,70 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
   );
 };
 
+
 export default function TabsLayout() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+
+  useEffect(() => {
+    // 1. Get initial session status
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoadingInitial(false);
+    });
+
+    // 2. Set up real-time listener for session changes (login/logout/token refresh)
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    );
+
+    // 3. Cleanup the listener on unmount
+    return () => {
+        authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // If we are still checking the initial session, show a loading screen across all tabs
+  if (loadingInitial) {
+    return (
+      <View style={styles.initialLoadingContainer}>
+        <Text style={{ fontSize: 18, color: DarkGreen }}>Initializing App...</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarShowLabel: false,
-          headerStyle: {
-            backgroundColor: OffWhite,
-          },
-          headerTintColor: '#fff',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
-        }}
-        tabBar={(props) => <CustomTabBar {...props} />}
-      >
-        <Tabs.Screen name="index" options={{ title: 'Home' }} />
-        <Tabs.Screen name="scan" options={{ title: 'Scan' }} />
-        <Tabs.Screen name="account" options={{ title: 'Account' }} />
-      </Tabs>
-    </View>
+    // --- 2. WRAP TABS WITH SESSION CONTEXT PROVIDER ---
+    <SessionContext.Provider value={{ session, isLoading: loadingInitial }}>
+      <View style={styles.container}>
+        <Tabs
+          screenOptions={{
+            headerShown: false,
+            tabBarShowLabel: false,
+            headerStyle: {
+              backgroundColor: OffWhite,
+            },
+            headerTintColor: '#fff',
+            headerTitleStyle: {
+              fontWeight: 'bold',
+            },
+          }}
+          tabBar={(props) => <CustomTabBar {...props} />}
+        >
+          <Tabs.Screen name="index" options={{ title: 'Home' }} />
+          <Tabs.Screen name="scan" options={{ title: 'Scan' }} />
+          {/* FIX: Use file-based routing and let the Account screen consume the context */}
+          <Tabs.Screen 
+              name="account" 
+              options={{ title: 'Account' }}
+              // component prop removed to resolve TypeScript error
+          />
+
+        </Tabs>
+      </View>
+    </SessionContext.Provider>
   );
 }
 
@@ -121,6 +182,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  // Added for initial loading screen
+  initialLoadingContainer: {
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: OffWhite,
   },
   tabBarContainer: {
     position: 'absolute',

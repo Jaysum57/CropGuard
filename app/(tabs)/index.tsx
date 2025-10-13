@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
-import React from "react";
+import React, { useState, useEffect, useContext } from "react"; // ADDED: useState, useEffect, useContext
+import { supabase } from '../../lib/supabase'; // ADDED: supabase import
+import { SessionContext } from './_layout'; // ADDED: SessionContext import
 import {
   Dimensions,
   FlatList,
@@ -22,6 +24,20 @@ const Yellow = "#FFD94D";
 const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 
+// Define the structure for the profile data we will fetch
+interface Profile {
+    full_name: string | null;
+    username: string | null;
+}
+
+type Disease = {
+  title: string;
+  description: string;
+  image?: any;
+  page: string;
+  tag: string;
+  severity: "Low" | "Medium" | "High";
+  color: string;
 const severityColors = {
   Low: "#38A169",    // Green
   Medium: "#FF8C00", // Orange
@@ -59,14 +75,79 @@ const quickActions = [
   },
 ];
 
-const user = {
-  name: "Leonardo",
-  plantsScanned: 47,
-  lastScan: "2 hours ago",
-};
+// Removed hardcoded user object
 
 export default function Index() {
   const router = useRouter();
+
+  // 1. Get the session and loading state from context
+  const { session, isLoading: isSessionLoading } = useContext(SessionContext);
+  
+  // 2. State for the user's profile
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true); // Start true
+
+  // 3. Dummy statistics (for now)
+  const [stats] = useState({
+      plantsScanned: 47,
+      lastScan: "2 hours ago",
+  });
+
+  /**
+   * 4. Function to fetch the user's profile data
+   */
+  async function getProfile() {
+      if (!session?.user) {
+          setProfile(null);
+          setLoadingProfile(false);
+          return;
+      }
+
+      setLoadingProfile(true);
+      try {
+          const { data, error } = await supabase
+              .from('profiles')
+              .select(`full_name, username`) 
+              .eq('id', session.user.id)
+              .single();
+
+          if (error) {
+              console.error("Error fetching profile for index:", error.message);
+          }
+
+          if (data) {
+              setProfile(data as Profile);
+          } else {
+              setProfile(null);
+          }
+      } catch (error) {
+          if (error instanceof Error) {
+              console.error('Error in getProfile:', error.message);
+          }
+      } finally {
+          setLoadingProfile(false);
+      }
+  }
+
+  // 5. Load profile data when the session changes
+  useEffect(() => {
+      // Only try to fetch if the session is not null
+      if (session) {
+          getProfile();
+      } else {
+          // If session is null (logged out), clear profile
+          setProfile(null);
+          setLoadingProfile(false);
+      }
+  }, [session]);
+
+  // 6. Determine the user's display name
+  const userName = 
+    profile?.full_name || 
+    profile?.username || 
+    session?.user.email?.split('@')[0] || // Use part of the email as a robust fallback
+    (isSessionLoading || loadingProfile ? "Loading" : "New User");
+
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
@@ -78,7 +159,8 @@ export default function Index() {
           <View style={styles.headerContent}>
             <View>
               <Text style={styles.welcomeText}>Welcome back,</Text>
-              <Text style={styles.userNameText}>{user.name}! 👋</Text>
+              {/* 7. Use the dynamic userName */}
+              <Text style={styles.userNameText}>{userName}! 👋</Text>
             </View>
             <TouchableOpacity style={styles.profileButton} onPress={() => router.push("/account")}>
               <Ionicons name="person-circle" size={40} color={Green} />
@@ -88,12 +170,12 @@ export default function Index() {
           {/* Stats Card */}
           <View style={styles.statsCard}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{user.plantsScanned}</Text>
+              <Text style={styles.statNumber}>{stats.plantsScanned}</Text> 
               <Text style={styles.statLabel}>Plants Scanned</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{user.lastScan}</Text>
+              <Text style={styles.statNumber}>{stats.lastScan}</Text> 
               <Text style={styles.statLabel}>Last Scan</Text>
             </View>
           </View>
