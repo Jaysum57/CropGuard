@@ -314,18 +314,6 @@ async function fetchUserStats() {
                             <Ionicons name="chevron-forward" size={20} color="#999" />
                         </TouchableOpacity>
                     </View>
-                    
-                    {/* Username */}
-                    <View style={styles.infoCard}>
-                        <Ionicons name="at-outline" size={24} color={Green} />
-                        <View style={styles.infoContent}>
-                            <Text style={styles.infoLabel}>Username</Text>
-                            <Text style={styles.infoValue}>{profile?.username || 'Not set'}</Text>
-                        </View>
-                        <TouchableOpacity onPress={handleEditProfile}>
-                            <Ionicons name="chevron-forward" size={20} color="#999" />
-                        </TouchableOpacity>
-                    </View>
 
                     {/* Email */}
                     <View style={styles.infoCard}>
@@ -366,6 +354,7 @@ async function fetchUserStats() {
 
                 {/* Action Buttons */}
                 <View style={styles.actionSection}>
+
                     <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
                         <Ionicons name="create-outline" size={20} color={Green} />
                         <Text style={styles.editButtonText}>Edit Profile</Text>

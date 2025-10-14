@@ -63,6 +63,10 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
             iconName = 'scan-outline';
             activeIconName = 'scan';
             displayLabel = 'Scan';
+          } else if (label === 'History') {
+            iconName = 'time-outline';
+            activeIconName = 'time';
+            displayLabel = 'History';
           } else if (label === 'Account') {
             iconName = 'person-outline';
             activeIconName = 'person';
@@ -183,6 +187,7 @@ export default function TabsLayout() {
         >
           <Tabs.Screen name="index" options={{ title: 'Home' }} />
           <Tabs.Screen name="scan" options={{ title: 'Scan' }} />
+          <Tabs.Screen name="userHistory" options={{ title: 'History' }} />
           {/* FIX: Use file-based routing and let the Account screen consume the context */}
           <Tabs.Screen 
               name="account" 
