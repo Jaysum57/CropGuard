@@ -268,7 +268,7 @@ function UserHistoryScreen() {
                   <Image
                     source={{ uri: selectedItem.bucket_file_path }}
                     style={styles.modalImage}
-                    resizeMode="contain"
+                    resizeMode="cover"
                   />
                 </View>
 
@@ -534,8 +534,6 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 300,
     backgroundColor: "#f8f8f8",
-    justifyContent: "center",
-    alignItems: "center",
   },
   modalImage: {
     width: "100%",
