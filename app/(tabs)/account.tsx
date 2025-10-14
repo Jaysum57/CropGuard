@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router'; // 1. Import useRouter
 import React, { useContext, useEffect, useState } from "react";
-import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supabase } from '../../lib/supabase';
 
 // Import SessionContext from the layout file
 import { eventEmitter, EVENTS } from '../../lib/eventEmitter';
+import { profileCache } from '../../lib/profileCache';
 import { SessionContext } from './_layout';
 
 
@@ -47,6 +48,7 @@ export default function Account() {
 
     const [loadingProfile, setLoadingProfile] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
 
     const [userStats, setUserStats] = useState<UserStats>({ 
         plantsScanned: 0, 
@@ -74,8 +76,17 @@ export default function Account() {
         return profile?.username || 'New User';
     };
 
-async function fetchUserStats() {
+async function fetchUserStats(forceRefresh = false) {
     if (!session?.user) return;
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+        const cachedStats = profileCache.getStats(session.user.id);
+        if (cachedStats) {
+            setUserStats(cachedStats);
+            return;
+        }
+    }
 
     try {
         // 1. Get TOTAL SCANS: Count all entries for the user
@@ -113,12 +124,17 @@ async function fetchUserStats() {
         const healthyScans = healthyCount || 0;
         const diseasesDetected = plantsScanned - healthyScans;
 
-        setUserStats({
+        const stats = {
             plantsScanned,
             healthyScans,
             diseasesDetected,
             accuracy: `${Math.round(avgAccuracy * 100)}%`
-        });
+        };
+
+        setUserStats(stats);
+        
+        // Cache the stats
+        profileCache.setStats(session.user.id, stats);
         
     } catch (error) {
         if (error instanceof Error) {
@@ -130,11 +146,22 @@ async function fetchUserStats() {
 
     /**
      * Fetches the user's profile data from the 'profiles' table.
+     * @param forceRefresh - If true, bypasses cache and fetches fresh data
      */
-    async function getProfile() {
+    async function getProfile(forceRefresh = false) {
         if (!session?.user) {
             setLoadingProfile(false);
             return;
+        }
+
+        // Check cache first (unless force refresh)
+        if (!forceRefresh) {
+            const cachedProfile = profileCache.getProfile(session.user.id);
+            if (cachedProfile) {
+                setProfile(cachedProfile);
+                setLoadingProfile(false);
+                return;
+            }
         }
 
         try {
@@ -152,7 +179,10 @@ async function fetchUserStats() {
             }
 
             if (data) {
-                setProfile(data as Profile);
+                const profileData = data as Profile;
+                setProfile(profileData);
+                // Cache the profile data
+                profileCache.setProfile(session.user.id, profileData);
             } else {
                 setProfile(null);
             }
@@ -184,7 +214,9 @@ async function fetchUserStats() {
         const handleScanCompleted = () => {
             console.log('Account: Scan completed event received, refreshing stats...');
             if (session?.user) {
-                fetchUserStats();
+                // Invalidate stats cache and fetch fresh data
+                profileCache.invalidateStats(session.user.id);
+                fetchUserStats(true);
             }
         };
 
@@ -195,6 +227,46 @@ async function fetchUserStats() {
         };
     }, [session]);
 
+    // Listen for profile update events
+    useEffect(() => {
+        const handleProfileUpdated = () => {
+            console.log('Account: Profile updated event received, refreshing profile...');
+            if (session?.user) {
+                // Invalidate profile cache and fetch fresh data
+                profileCache.invalidateProfile(session.user.id);
+                getProfile(true);
+            }
+        };
+
+        eventEmitter.on(EVENTS.PROFILE_UPDATED, handleProfileUpdated);
+
+        return () => {
+            eventEmitter.off(EVENTS.PROFILE_UPDATED, handleProfileUpdated);
+        };
+    }, [session]);
+
+
+    /**
+     * Handle pull-to-refresh - fetches fresh data from database
+     */
+    const onRefresh = async () => {
+        if (!session?.user) return;
+        
+        setRefreshing(true);
+        console.log('🔄 Refreshing profile and stats...');
+        
+        try {
+            // Fetch fresh data from database (bypassing cache)
+            await Promise.all([
+                getProfile(true),
+                fetchUserStats(true)
+            ]);
+        } catch (error) {
+            console.error('Error refreshing data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     const handleLogout = () => {
         Alert.alert(
@@ -211,6 +283,11 @@ async function fetchUserStats() {
                             if (error) throw error;
                             console.log("User successfully signed out");
                             
+                            // Clear profile cache on logout
+                            if (session?.user) {
+                                profileCache.invalidateUser(session.user.id);
+                            }
+                            
                             // Navigation will be handled automatically by the auth state listener in _layout.tsx
                             // No need for manual router.replace('/auth') here
 
@@ -226,6 +303,9 @@ async function fetchUserStats() {
     };
 
     const handleEditProfile = () => {
+        // TODO: Navigate to edit profile screen
+        // When profile is updated, emit PROFILE_UPDATED event:
+        // eventEmitter.emit(EVENTS.PROFILE_UPDATED);
         Alert.alert("Feature", "Navigating to Edit Profile...");
     };
 
@@ -258,7 +338,19 @@ async function fetchUserStats() {
     // Since we checked if session is null above, we can safely access session.user here.
     return (
         <View style={styles.container}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        colors={[Green]} // Android
+                        tintColor={Green} // iOS
+                        title="Pull to refresh" // iOS
+                        titleColor={DarkGreen} // iOS
+                    />
+                }
+            >
                 {/* Profile Header */}
                 <View style={styles.profileHeader}>
                     <View style={styles.profileIconContainer}>

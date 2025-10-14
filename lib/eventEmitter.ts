@@ -57,4 +57,5 @@ export const eventEmitter = new EventEmitter();
 // Event types
 export const EVENTS = {
   SCAN_COMPLETED: 'scan_completed',
+  PROFILE_UPDATED: 'profile_updated',
 } as const;
