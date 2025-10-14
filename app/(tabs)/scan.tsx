@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Session } from '@supabase/supabase-js';
 import { CameraType, CameraView, FlashMode, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -17,6 +18,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getRoutingInfo } from "../../lib/diseaseMapping";
 import { eventEmitter, EVENTS } from "../../lib/eventEmitter";
 import { supabase } from "../../lib/supabase";
 
@@ -27,6 +29,7 @@ const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 
 function ScanScreen() {
+  const router = useRouter();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [processingVisible, setProcessingVisible] = useState(false);
@@ -242,6 +245,11 @@ function ScanScreen() {
         }
         
         const resultJson = await response.json();
+        
+        // Debug: Log raw prediction keys from API
+        console.log('🔬 [API] Raw prediction keys:', Object.keys(resultJson.predictions || {}));
+        console.log('🔬 [API] Full predictions:', resultJson.predictions);
+        
         setResult(resultJson);
 
         // 3. LOGIC FOR UPLOAD & LOGGING
@@ -316,6 +324,11 @@ function ScanScreen() {
         }
         
         const resultJson = await response.json();
+        
+        // Debug: Log raw prediction keys from API
+        console.log('🔬 [API] Raw prediction keys:', Object.keys(resultJson.predictions || {}));
+        console.log('🔬 [API] Full predictions:', resultJson.predictions);
+        
         setResult(resultJson);
         
         // 2. LOGIC FOR UPLOAD & LOGGING
@@ -762,9 +775,13 @@ function ScanScreen() {
                   const topPrediction = Object.entries(result.predictions)
                     .sort(([,a], [,b]) => (b as number) - (a as number))[0];
                   const [topPlant, topConfidence] = topPrediction;
-                  const cleanTopPlant = topPlant.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  
+                  // Get routing info using the mapping
+                  const routingInfo = getRoutingInfo(topPlant);
+                  const { diseaseId, isRoutable, displayName } = routingInfo;
+                  
                   const confidencePercent = ((topConfidence as number) * 100).toFixed(1);
-                  const isHealthy = topPlant.toLowerCase().includes('healthy');
+                  const isHealthy = diseaseId === null;
                   
                   let statusColor = "#E53E3E";
                   let statusIcon = "alert-circle";
@@ -780,15 +797,42 @@ function ScanScreen() {
                     statusText = "Uncertain";
                   }
 
+                  const handlePress = () => {
+                    if (isRoutable && diseaseId) {
+                      // Close modal first
+                      setModalVisible(false);
+                      // Navigate to disease detail page after a brief delay
+                      setTimeout(() => {
+                        router.push(`/details/${diseaseId}`);
+                      }, 300);
+                    } else if (isHealthy) {
+                      Alert.alert(
+                        "Healthy Plant! 🌱",
+                        "Great news! Your plant appears to be healthy. Keep up the good care!",
+                        [{ text: "OK" }]
+                      );
+                    } else {
+                      Alert.alert(
+                        "No Details Available",
+                        "We couldn't find detailed information for this condition. Please consult with a plant expert.",
+                        [{ text: "OK" }]
+                      );
+                    }
+                  };
+
                   return (
-                    <View style={styles.topPredictionCard}>
+                    <TouchableOpacity 
+                      style={styles.topPredictionCard}
+                      onPress={handlePress}
+                      activeOpacity={0.7}
+                    >
                       <View style={styles.topPredictionHeader}>
                         <View style={[styles.statusIconContainer, { backgroundColor: statusColor }]}>
                           <Ionicons name={statusIcon as any} size={28} color="#fff" />
                         </View>
                         <View style={styles.topPredictionInfo}>
                           <Text style={styles.statusText}>{statusText}</Text>
-                          <Text style={styles.topPredictionName}>{cleanTopPlant}</Text>
+                          <Text style={styles.topPredictionName}>{displayName}</Text>
                           <View style={styles.confidenceContainer}>
                             <Text style={styles.confidenceText}>Confidence: </Text>
                             <Text style={[styles.confidenceValue, { color: statusColor }]}>
@@ -796,6 +840,9 @@ function ScanScreen() {
                             </Text>
                           </View>
                         </View>
+                        {isRoutable && (
+                          <Ionicons name="chevron-forward" size={24} color="#999" />
+                        )}
                       </View>
                       <View style={styles.topPredictionBar}>
                         <View style={[styles.topPredictionProgress, { 
@@ -803,7 +850,13 @@ function ScanScreen() {
                           backgroundColor: statusColor 
                         }]} />
                       </View>
-                    </View>
+                      {isRoutable && (
+                        <View style={styles.tapHintContainer}>
+                          <Ionicons name="information-circle-outline" size={16} color="#666" />
+                          <Text style={styles.tapHint}>Tap to learn more about this disease</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
                   );
                 })()}
 
@@ -1356,6 +1409,20 @@ const styles = StyleSheet.create({
   topPredictionProgress: {
     height: "100%",
     borderRadius: 3,
+  },
+  tapHintContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E9ECEF",
+    gap: 6,
+  },
+  tapHint: {
+    fontSize: 13,
+    color: "#666",
+    fontStyle: "italic",
   },
   additionalPredictions: {
     marginTop: 8,
