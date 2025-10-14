@@ -129,6 +129,7 @@ export default function Index() {
   /**
    * REFACTORED: Function to fetch aggregate scan statistics (Count & Last Scan Time)
    * This uses a more robust two-step Supabase query to ensure reliability even with zero logs.
+   * Now properly caches the lastScan timestamp.
    * @param userId - The user's ID
    * @param forceRefresh - If true, bypasses cache and fetches fresh data
    */
@@ -136,18 +137,19 @@ export default function Index() {
     // Check cache first (unless force refresh)
     if (!forceRefresh) {
       const cachedStats = profileCache.getStats(userId);
-      if (cachedStats) {
+      if (cachedStats && cachedStats.lastScan !== undefined) {
+        logger.cache('Using cached scan stats (including lastScan)', 'hit');
         setStats({
           plantsScanned: cachedStats.plantsScanned,
-          lastScan: cachedStats.healthyScans.toString(), // Note: This is a workaround, we'll need to adjust
+          lastScan: cachedStats.lastScan || null,
         });
-        // Note: The cached stats structure is different from what index.tsx uses
-        // We're only caching plantsScanned here, not lastScan
-        // For now, we'll still fetch from DB but this shows the cache pattern
+        return; // Use cached data
       }
     }
 
     try {
+      logger.log('Fetching fresh scan stats from database...');
+      
       // 1. Get the total count of scans
       const { count, error: countError } = await supabase
         .from('scan_activity')
@@ -186,14 +188,16 @@ export default function Index() {
         lastScan: lastScanTime,
       });
 
-      // Cache the stats (using the structure from account.tsx)
-      // Note: This is a simplified version - ideally we'd create a separate cache structure for index stats
+      // Cache the stats with the lastScan timestamp
       profileCache.setStats(userId, {
         plantsScanned,
         diseasesDetected: 0, // Not used in index
         healthyScans: 0, // Not used in index
         accuracy: '0%', // Not used in index
+        lastScan: lastScanTime, // Now properly cached!
       });
+
+      logger.success('Scan stats fetched and cached successfully');
 
     } catch (error) {
       if (error instanceof Error) {

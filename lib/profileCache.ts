@@ -25,6 +25,7 @@ interface UserStats {
   diseasesDetected: number;
   healthyScans: number;
   accuracy: string;
+  lastScan?: string | null; // ISO timestamp of last scan
 }
 
 class ProfileCache {
