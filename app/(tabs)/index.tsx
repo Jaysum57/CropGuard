@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getAllDiseases } from "../../components/DiseaseData";
 import { eventEmitter, EVENTS } from '../../lib/eventEmitter';
+import { logger } from '../../lib/logger';
 import { profileCache } from '../../lib/profileCache';
 import { supabase } from '../../lib/supabase';
 import { SessionContext } from './_layout';
@@ -154,7 +155,7 @@ export default function Index() {
         .eq('user_id', userId);
 
       if (countError) {
-        console.error("Error fetching scan count:", countError.message);
+        logger.error("Error fetching scan count:", countError.message);
         return;
       }
       
@@ -174,7 +175,7 @@ export default function Index() {
 
         // Handle error, but skip the "No rows found" error (PGRST116) as it's unexpected here
         if (latestError && latestError.code !== 'PGRST116') {
-          console.error("Error fetching last scan time:", latestError.message);
+          logger.error("Error fetching last scan time:", latestError.message);
         } else if (latestData && latestData.scanned_at) {
           lastScanTime = latestData.scanned_at;
         }
@@ -196,7 +197,7 @@ export default function Index() {
 
     } catch (error) {
       if (error instanceof Error) {
-        console.error("Error in getScanStats:", error.message);
+        logger.error("Error in getScanStats:", error.message);
       }
     }
   }
@@ -236,7 +237,7 @@ export default function Index() {
               .single(); // Use single() since 'id' is a primary key
 
           if (error) {
-              console.error("Error fetching profile for index:", error.message);
+              logger.error("Error fetching profile for index:", error.message);
               setProfile(null);
               return;
           }
@@ -259,7 +260,7 @@ export default function Index() {
           }
       } catch (error) {
           if (error instanceof Error) {
-              console.error('Error in getProfile:', error.message);
+              logger.error('Error in getProfile:', error.message);
               setProfile(null);
           }
       } finally {
@@ -298,7 +299,7 @@ export default function Index() {
         }));
         setDiseases(mappedDiseases);
       } catch (error) {
-        console.error('Error fetching diseases:', error);
+        logger.error('Error fetching diseases:', error);
       }
     };
 
@@ -308,7 +309,7 @@ export default function Index() {
   // Listen for scan completion events and refresh stats
   useEffect(() => {
     const handleScanCompleted = () => {
-      console.log('Index: Scan completed event received, refreshing stats...');
+      logger.log('Index: Scan completed event received, refreshing stats...');
       if (session?.user) {
         // Invalidate stats cache and fetch fresh data
         profileCache.invalidateStats(session.user.id);
@@ -326,7 +327,7 @@ export default function Index() {
   // Listen for profile update events
   useEffect(() => {
     const handleProfileUpdated = () => {
-      console.log('Index: Profile updated event received, refreshing profile...');
+      logger.log('Index: Profile updated event received, refreshing profile...');
       if (session?.user) {
         // Invalidate profile cache and fetch fresh data
         profileCache.invalidateProfile(session.user.id);

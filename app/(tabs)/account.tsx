@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 
 // Import SessionContext from the layout file
 import { eventEmitter, EVENTS } from '../../lib/eventEmitter';
+import { logger } from '../../lib/logger';
 import { profileCache } from '../../lib/profileCache';
 import { SessionContext } from './_layout';
 
@@ -138,7 +139,7 @@ async function fetchUserStats(forceRefresh = false) {
         
     } catch (error) {
         if (error instanceof Error) {
-            console.error('Error fetching user stats:', error.message);
+            logger.error('Error fetching user stats:', error.message);
         }
     }
 }
@@ -188,7 +189,7 @@ async function fetchUserStats(forceRefresh = false) {
             }
         } catch (error) {
             if (error instanceof Error) {
-                console.error('Error fetching profile:', error.message);
+                logger.error('Error fetching profile:', error.message);
             }
         } finally {
             setLoadingProfile(false);
@@ -197,7 +198,7 @@ async function fetchUserStats(forceRefresh = false) {
 
     // Load profile data on component mount or when session changes
     useEffect(() => {
-        console.log("Account Component: Session Status (via Context) ->", session ? 'Active' : 'Null/Expired');
+        logger.log("Account Component: Session Status (via Context) ->", session ? 'Active' : 'Null/Expired');
         
         if (session) {
             getProfile();
@@ -212,7 +213,7 @@ async function fetchUserStats(forceRefresh = false) {
     // Listen for scan completion events and refresh stats
     useEffect(() => {
         const handleScanCompleted = () => {
-            console.log('Account: Scan completed event received, refreshing stats...');
+            logger.log('Account: Scan completed event received, refreshing stats...');
             if (session?.user) {
                 // Invalidate stats cache and fetch fresh data
                 profileCache.invalidateStats(session.user.id);
@@ -230,7 +231,7 @@ async function fetchUserStats(forceRefresh = false) {
     // Listen for profile update events
     useEffect(() => {
         const handleProfileUpdated = () => {
-            console.log('Account: Profile updated event received, refreshing profile...');
+            logger.log('Account: Profile updated event received, refreshing profile...');
             if (session?.user) {
                 // Invalidate profile cache and fetch fresh data
                 profileCache.invalidateProfile(session.user.id);
@@ -253,7 +254,7 @@ async function fetchUserStats(forceRefresh = false) {
         if (!session?.user) return;
         
         setRefreshing(true);
-        console.log('🔄 Refreshing profile and stats...');
+        logger.custom('🔄', 'Refreshing profile and stats...');
         
         try {
             // Fetch fresh data from database (bypassing cache)
@@ -262,7 +263,7 @@ async function fetchUserStats(forceRefresh = false) {
                 fetchUserStats(true)
             ]);
         } catch (error) {
-            console.error('Error refreshing data:', error);
+            logger.error('Error refreshing data:', error);
         } finally {
             setRefreshing(false);
         }
@@ -281,7 +282,7 @@ async function fetchUserStats(forceRefresh = false) {
                         try {
                             const { error } = await supabase.auth.signOut();
                             if (error) throw error;
-                            console.log("User successfully signed out");
+                            logger.log("User successfully signed out");
                             
                             // Clear profile cache on logout
                             if (session?.user) {
@@ -292,7 +293,7 @@ async function fetchUserStats(forceRefresh = false) {
                             // No need for manual router.replace('/auth') here
 
                         } catch (error) {
-                            console.error("Logout Error:", error);
+                            logger.error("Logout Error:", error);
                             Alert.alert("Logout Error", "Failed to sign out. Please try again.");
                         }
                     },

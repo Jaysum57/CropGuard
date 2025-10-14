@@ -4,6 +4,8 @@
  * Implements TTL (time-to-live) and event-driven invalidation
  */
 
+import { logger } from './logger';
+
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
@@ -60,13 +62,13 @@ class ProfileCache {
                 localStorage.removeItem(key);
               }
             } catch (e) {
-              console.error('Error parsing profile cache entry:', e);
+              logger.error('Error parsing profile cache entry:', e);
             }
           }
         });
       }
     } catch (e) {
-      console.error('Error loading profile cache from storage:', e);
+      logger.error('Error loading profile cache from storage:', e);
     }
   }
 
@@ -82,7 +84,7 @@ class ProfileCache {
         );
       }
     } catch (e) {
-      console.error('Error saving profile cache to storage:', e);
+      logger.error('Error saving profile cache to storage:', e);
     }
   }
 
@@ -114,7 +116,7 @@ class ProfileCache {
 
     this.cache.set(key, entry);
     this.saveToStorage(key, entry);
-    console.log(`✅ Profile cached for user ${userId} (expires in ${this.CACHE_DURATION / 60000} minutes)`);
+    logger.success(`Profile cached for user ${userId} (expires in ${this.CACHE_DURATION / 60000} minutes)`);
   }
 
   /**
@@ -125,19 +127,19 @@ class ProfileCache {
     const entry = this.cache.get(key);
 
     if (!entry) {
-      console.log(`❌ Profile cache miss for user ${userId}`);
+      logger.cache(`Profile cache miss for user ${userId}`, 'miss');
       return null;
     }
 
     // Check if expired
     if (entry.expiresAt < Date.now()) {
-      console.log(`⏰ Profile cache expired for user ${userId}`);
+      logger.cache(`Profile cache expired for user ${userId}`, 'expired');
       this.invalidateProfile(userId);
       return null;
     }
 
     const age = Math.round((Date.now() - entry.timestamp) / 1000);
-    console.log(`✅ Profile cache hit for user ${userId} (age: ${age}s)`);
+    logger.cache(`Profile cache hit for user ${userId} (age: ${age}s)`, 'hit');
     return entry.data;
   }
 
@@ -155,7 +157,7 @@ class ProfileCache {
 
     this.cache.set(key, entry);
     this.saveToStorage(key, entry);
-    console.log(`✅ Stats cached for user ${userId} (expires in ${this.CACHE_DURATION / 60000} minutes)`);
+    logger.success(`Stats cached for user ${userId} (expires in ${this.CACHE_DURATION / 60000} minutes)`);
   }
 
   /**
@@ -166,19 +168,19 @@ class ProfileCache {
     const entry = this.cache.get(key);
 
     if (!entry) {
-      console.log(`❌ Stats cache miss for user ${userId}`);
+      logger.cache(`Stats cache miss for user ${userId}`, 'miss');
       return null;
     }
 
     // Check if expired
     if (entry.expiresAt < Date.now()) {
-      console.log(`⏰ Stats cache expired for user ${userId}`);
+      logger.cache(`Stats cache expired for user ${userId}`, 'expired');
       this.invalidateStats(userId);
       return null;
     }
 
     const age = Math.round((Date.now() - entry.timestamp) / 1000);
-    console.log(`✅ Stats cache hit for user ${userId} (age: ${age}s)`);
+    logger.cache(`Stats cache hit for user ${userId} (age: ${age}s)`, 'hit');
     return entry.data;
   }
 
@@ -192,7 +194,7 @@ class ProfileCache {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.removeItem(`${this.STORAGE_PREFIX}${key}`);
     }
-    console.log(`🗑️ Profile cache invalidated for user ${userId}`);
+    logger.cache(`Profile cache invalidated for user ${userId}`, 'invalidated');
   }
 
   /**
@@ -205,7 +207,7 @@ class ProfileCache {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.removeItem(`${this.STORAGE_PREFIX}${key}`);
     }
-    console.log(`🗑️ Stats cache invalidated for user ${userId}`);
+    logger.cache(`Stats cache invalidated for user ${userId}`, 'invalidated');
   }
 
   /**
@@ -214,7 +216,7 @@ class ProfileCache {
   invalidateUser(userId: string): void {
     this.invalidateProfile(userId);
     this.invalidateStats(userId);
-    console.log(`🗑️ All cache invalidated for user ${userId}`);
+    logger.cache(`All cache invalidated for user ${userId}`, 'invalidated');
   }
 
   /**
@@ -229,7 +231,7 @@ class ProfileCache {
       );
       keys.forEach(key => localStorage.removeItem(key));
     }
-    console.log('🗑️ All profile cache cleared');
+    logger.cache('All profile cache cleared', 'invalidated');
   }
 
   /**
