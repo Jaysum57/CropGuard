@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getAllDiseases } from "../../components/DiseaseData";
+import { eventEmitter, EVENTS } from '../../lib/eventEmitter';
 import { supabase } from '../../lib/supabase';
 import { SessionContext } from './_layout';
 
@@ -36,35 +37,21 @@ interface UserStats {
   lastScan: string | null; 
 }
 
-type Disease = {
+interface Disease {
   title: string;
   description: string;
-  image?: any;
-  page: string;
+  image: string;
+  page: Href;
   tag: string;
   severity: "Low" | "Medium" | "High";
   color: string;
-};
+}
 
-const severityColors = {
+const severityColors: Record<Disease['severity'], string> = {
   Low: "#38A169",    // Green
   Medium: "#FF8C00", // Orange
   High: "#E53E3E",   // Red
 };
-
-// Convert disease data to the format expected by the UI
-const diseaseData = getAllDiseases();
-const diseases = diseaseData.map(disease => ({
-  title: disease.name,
-  description: disease.description,
-  image: disease.image,
-  page: `/details/${disease.id}` as Href,
-  tag: disease.category.includes('Fungal') ? 'Fungal' : 
-       disease.category.includes('Bacterial') ? 'Bacterial' : 'Other',
-  severity: disease.severity,
-  color: severityColors[disease.severity],
-}));
-
 
 const quickActions = [
   {
@@ -123,20 +110,19 @@ function formatLastScanTime(timestamp: string | undefined): { relativeTime: stri
 }
 
 export default function Index() {
+  // 1. Initialize all hooks at the top level
   const router = useRouter();
-
-  // 1. Get the session and loading state from context
   const { session, isLoading: isSessionLoading } = useContext(SessionContext);
   
-  // 2. State for the user's profile
+  // 2. All useState hooks together
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
-
-  // 3. UPDATED: State for real user statistics
   const [stats, setStats] = useState<UserStats>({
     plantsScanned: 0,
     lastScan: null,
   });
+  const [diseases, setDiseases] = useState<Disease[]>([]);
+  const [lastScanUpdateTrigger, setLastScanUpdateTrigger] = useState(0);
 
   /**
    * REFACTORED: Function to fetch aggregate scan statistics (Count & Last Scan Time)
@@ -243,6 +229,56 @@ export default function Index() {
           setStats({ plantsScanned: 0, lastScan: "Never" }); // Reset stats
       }
   }, [session]);
+
+  // Fetch diseases when component mounts
+  useEffect(() => {
+    const fetchDiseases = async () => {
+      try {
+        const diseaseData = await getAllDiseases();
+        const mappedDiseases = diseaseData.map(disease => ({
+          title: disease.name,
+          description: disease.description,
+          image: disease.image,
+          page: `/details/${disease.id}` as Href,
+          tag: disease.category.includes('Fungal') ? 'Fungal' : 
+               disease.category.includes('Bacterial') ? 'Bacterial' : 'Other',
+          severity: disease.severity,
+          color: severityColors[disease.severity],
+        }));
+        setDiseases(mappedDiseases);
+      } catch (error) {
+        console.error('Error fetching diseases:', error);
+      }
+    };
+
+    fetchDiseases();
+  }, []);
+
+  // Listen for scan completion events and refresh stats
+  useEffect(() => {
+    const handleScanCompleted = () => {
+      console.log('Index: Scan completed event received, refreshing stats...');
+      if (session?.user) {
+        getScanStats(session.user.id);
+      }
+    };
+
+    eventEmitter.on(EVENTS.SCAN_COMPLETED, handleScanCompleted);
+
+    return () => {
+      eventEmitter.off(EVENTS.SCAN_COMPLETED, handleScanCompleted);
+    };
+  }, [session]);
+
+  // Set up 1-minute timer to update "Last Scan" display
+  useEffect(() => {
+    // Update every 60 seconds to refresh relative time
+    const intervalId = setInterval(() => {
+      setLastScanUpdateTrigger(prev => prev + 1);
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(intervalId);
+  }, []);
 
   // 6. Determine the user's display name
   const userName = 
@@ -355,7 +391,7 @@ export default function Index() {
               >
                 <View style={styles.diseaseImageContainer}>
                   {item.image ? (
-                    <Image source={item.image} style={styles.diseaseImage} />
+                    <Image source={{ uri: item.image }} style={styles.diseaseImage} />
                   ) : (
                     <View style={styles.diseaseImagePlaceholder}>
                       <Ionicons name="leaf" size={40} color={Green} />

@@ -5,6 +5,7 @@ import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View
 import { supabase } from '../../lib/supabase';
 
 // Import SessionContext from the layout file
+import { eventEmitter, EVENTS } from '../../lib/eventEmitter';
 import { SessionContext } from './_layout';
 
 
@@ -176,6 +177,22 @@ async function fetchUserStats() {
             setLoadingProfile(false);
             setUserStats({ plantsScanned: 0, healthyScans: 0, diseasesDetected: 0, accuracy: '0%' }); // Reset stats on logout
         }
+    }, [session]);
+
+    // Listen for scan completion events and refresh stats
+    useEffect(() => {
+        const handleScanCompleted = () => {
+            console.log('Account: Scan completed event received, refreshing stats...');
+            if (session?.user) {
+                fetchUserStats();
+            }
+        };
+
+        eventEmitter.on(EVENTS.SCAN_COMPLETED, handleScanCompleted);
+
+        return () => {
+            eventEmitter.off(EVENTS.SCAN_COMPLETED, handleScanCompleted);
+        };
     }, [session]);
 
 

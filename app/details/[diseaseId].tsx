@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
-import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getDiseaseById } from "../../components/DiseaseData";
 
@@ -16,8 +16,35 @@ const Red = "#E53E3E";
 export default function DiseaseDetail() {
   const router = useRouter();
   const { diseaseId } = useLocalSearchParams<{ diseaseId: string }>();
-  
-  const diseaseData = getDiseaseById(diseaseId || "");
+  const [diseaseData, setDiseaseData] = React.useState<ReturnType<typeof getDiseaseById> extends Promise<infer T> ? T : never>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchDiseaseData = async () => {
+      setIsLoading(true);
+      try {
+        const data = await getDiseaseById(diseaseId || "");
+        setDiseaseData(data);
+      } catch (error) {
+        console.error('Error fetching disease data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDiseaseData();
+  }, [diseaseId]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <ActivityIndicator size="large" color={Green} />
+          <Text style={[styles.errorText, { marginTop: 16 }]}>Loading disease information...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!diseaseData) {
     return (
@@ -73,7 +100,7 @@ export default function DiseaseDetail() {
         <View style={styles.heroSection}>
           <View style={styles.imageContainer}>
             <Image
-              source={diseaseData.image}
+              source={{ uri: diseaseData.image }}
               style={styles.diseaseImage}
             />
             <View style={styles.imageOverlay}>
@@ -97,8 +124,8 @@ export default function DiseaseDetail() {
               </View>
               <View style={styles.statContent}>
                 <Text style={styles.statCategory}>Risk Level</Text>
-                <Text style={styles.statMainValue}>{diseaseData.quickStats.severity.level}</Text>
-                <Text style={styles.statScore}>{diseaseData.quickStats.severity.score}</Text>
+                <Text style={styles.statMainValue}>{diseaseData.quickStats?.severity?.level ?? 'N/A'}</Text>
+                <Text style={styles.statScore}>{diseaseData.quickStats?.severity?.score ?? '-'}</Text>
               </View>
             </View>
             
@@ -108,8 +135,8 @@ export default function DiseaseDetail() {
               </View>
               <View style={styles.statContent}>
                 <Text style={styles.statCategory}>Spread Rate</Text>
-                <Text style={styles.statMainValue}>{diseaseData.quickStats.transmission.level}</Text>
-                <Text style={styles.statScore}>{diseaseData.quickStats.transmission.score}</Text>
+                <Text style={styles.statMainValue}>{diseaseData.quickStats?.transmission?.level ?? 'N/A'}</Text>
+                <Text style={styles.statScore}>{diseaseData.quickStats?.transmission?.score ?? '-'}</Text>
               </View>
             </View>
             
@@ -119,8 +146,8 @@ export default function DiseaseDetail() {
               </View>
               <View style={styles.statContent}>
                 <Text style={styles.statCategory}>Treatment</Text>
-                <Text style={styles.statMainValue}>{diseaseData.quickStats.treatment.level}</Text>
-                <Text style={styles.statScore}>{diseaseData.quickStats.treatment.score}</Text>
+                <Text style={styles.statMainValue}>{diseaseData.quickStats?.treatment?.level ?? 'N/A'}</Text>
+                <Text style={styles.statScore}>{diseaseData.quickStats?.treatment?.score ?? '-'}</Text>
               </View>
             </View>
             
@@ -130,8 +157,8 @@ export default function DiseaseDetail() {
               </View>
               <View style={styles.statContent}>
                 <Text style={styles.statCategory}>Impact</Text>
-                <Text style={styles.statMainValue}>{diseaseData.quickStats.impact.level}</Text>
-                <Text style={styles.statScore}>{diseaseData.quickStats.impact.score}</Text>
+                <Text style={styles.statMainValue}>{diseaseData.quickStats?.impact?.level ?? 'N/A'}</Text>
+                <Text style={styles.statScore}>{diseaseData.quickStats?.impact?.score ?? '-'}</Text>
               </View>
             </View>
           </View>
@@ -164,10 +191,10 @@ export default function DiseaseDetail() {
                   <Ionicons 
                     name={symptom.icon as any} 
                     size={20} 
-                    color={getSeverityColor(symptom.severity)} 
+                    color={getSeverityColor(symptom.severity || 'low')} 
                   />
                   <Text style={styles.symptomTitle}>{symptom.title}</Text>
-                  <View style={[styles.severityDot, { backgroundColor: getSeverityColor(symptom.severity) }]} />
+                  <View style={[styles.severityDot, { backgroundColor: getSeverityColor(symptom.severity || 'low') }]} />
                 </View>
                 <Text style={styles.symptomDescription}>{symptom.description}</Text>
               </View>
@@ -180,7 +207,7 @@ export default function DiseaseDetail() {
           <Text style={styles.sectionTitle}>
             <Ionicons name="help-circle" size={20} color={Orange} /> What Causes This Disease
           </Text>
-          {diseaseData.causes.map((cause, index) => (
+          {diseaseData.causes?.map((cause, index) => (
             <View key={index} style={styles.causeItem}>
               <Text style={styles.causeTitle}>{cause.title}:</Text>
               <Text style={styles.causeDescription}>{cause.description}</Text>
@@ -194,7 +221,7 @@ export default function DiseaseDetail() {
             <Ionicons name="shield-checkmark" size={20} color={Green} /> Prevention Methods
           </Text>
           <View style={styles.methodsGrid}>
-            {diseaseData.prevention.map((method, index) => (
+            {diseaseData.prevention?.map((method, index) => (
               <View key={index} style={styles.methodCard}>
                 <View style={styles.methodHeader}>
                   <Ionicons name={method.icon as any} size={24} color={Green} />
@@ -222,7 +249,7 @@ export default function DiseaseDetail() {
             <Ionicons name="medical" size={20} color={Red} /> Treatment Options
           </Text>
           <View style={styles.methodsGrid}>
-            {diseaseData.treatments.map((treatment, index) => (
+            {diseaseData.treatments?.map((treatment, index) => (
               <View key={index} style={styles.treatmentCard}>
                 <View style={styles.treatmentHeader}>
                   <Ionicons name={treatment.icon as any} size={24} color={Red} />

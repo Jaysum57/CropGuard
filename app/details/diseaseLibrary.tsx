@@ -14,8 +14,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { categories } from "../../components/DiseaseData";
-import { supabase } from "../../lib/supabase";
+import { categories, getAllDiseases } from "../../components/DiseaseData";
 
 const screenWidth = Dimensions.get("window").width;
 const CARD_WIDTH = screenWidth * 0.45;
@@ -50,28 +49,20 @@ const AllDiseases = () => {
   const fetchDiseases = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('disease_data')
-        .select('*');
+      
+      // Use the cached getAllDiseases function
+      const data = await getAllDiseases();
 
-      if (error) {
-        console.error('Error fetching diseases:', error);
-        return;
-      }
-
-      // 🛑 FIX APPLIED HERE:
-      // The Supabase client returns affected_crops as a JavaScript array (string[]),
-      // so we should stop trying to parse it as a string.
-      const formattedDiseases = data.map((d: any) => ({
+      // Transform to match local interface
+      const formattedDiseases = data.map((d) => ({
         id: d.id,
         name: d.name,
         description: d.description,
         category: d.category,
         severity: d.severity,
-        // Direct assignment: Use the fetched array or an empty array as fallback
-        affectedCrops: (d.affected_crops || []) as string[], 
-        image_url: d.image_url,
-        page: d.page,
+        affectedCrops: d.affectedCrops || [],
+        image_url: d.image, // Map 'image' to 'image_url'
+        page: `/details/${d.id}`,
       })) as Disease[];
 
       setDiseases(formattedDiseases);
@@ -191,32 +182,40 @@ const AllDiseases = () => {
               </View>
             </View>
 
-        {/* Disease Grid */}
-        <View style={styles.gridContainer}>
-          <FlatList
-            data={filteredDiseases}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            scrollEnabled={false}
-            ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-            columnWrapperStyle={styles.row}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.diseaseCard}
-                onPress={() => router.push(`/details/${item.id}` as any)}
-                activeOpacity={0.7}
-              >
-                {/* Disease Image */}
-                <View style={styles.imageContainer}>
-                  {item.image ? (
-                    <Image source={item.image} style={styles.diseaseImage} />
-                  ) : (
-                    <View style={styles.placeholderContainer}>
-                      <Ionicons 
-                        name={getCategoryIcon(item.category) as any} 
-                        size={40} 
-                        color={Green} 
-                      />
+            {/* Disease Grid */}
+            <View style={styles.gridContainer}>
+              <FlatList
+                data={filteredDiseases}
+                keyExtractor={(item) => item.id}
+                numColumns={2}
+                scrollEnabled={false}
+                ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+                columnWrapperStyle={styles.row}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.diseaseCard}
+                    onPress={() => router.push(item.page || `/details/${item.id}` as any)}
+                    activeOpacity={0.7}
+                  >
+                    {/* Disease Image */}
+                    <View style={styles.imageContainer}>
+                      {item.image_url ? ( 
+                        <Image 
+                          source={{ uri: item.image_url }} 
+                          style={styles.diseaseImage} 
+                        />
+                      ) : (
+                        <View style={styles.placeholderContainer}>
+                          <Ionicons 
+                            name={getCategoryIcon(item.category) as any} 
+                            size={40} 
+                            color={Green} 
+                          />
+                        </View>
+                      )}
+                      <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
+                        <Text style={styles.severityText}>{item.severity}</Text>
+                      </View>
                     </View>
 
                     {/* Disease Info */}

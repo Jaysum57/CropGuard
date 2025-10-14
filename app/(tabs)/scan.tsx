@@ -17,6 +17,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { eventEmitter, EVENTS } from "../../lib/eventEmitter";
 import { supabase } from "../../lib/supabase";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -72,6 +73,7 @@ function ScanScreen() {
     }
 
     try {
+      console.log("Accuracy score:", accuracyScore);
       const { error } = await supabase
         .from('scan_activity')
         .insert([
@@ -100,6 +102,12 @@ function ScanScreen() {
         }
       } else {
         console.log("Scan logged successfully to scan_activity.");
+        // Emit event to notify other screens to refresh their stats
+        eventEmitter.emit(EVENTS.SCAN_COMPLETED, {
+          diseaseId,
+          accuracyScore,
+          timestamp: new Date().toISOString(),
+        });
       }
     } catch (e) {
       console.error("Exception during logging:", e);
