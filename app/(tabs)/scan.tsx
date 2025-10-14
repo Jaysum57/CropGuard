@@ -25,7 +25,6 @@ const Green = "#30BE63";
 const Yellow = "#FFD94D";
 const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
-const BUCKET_NAME = 'plants_scanned'; // Your Supabase Bucket Name
 
 function ScanScreen() {
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -59,9 +58,9 @@ function ScanScreen() {
 
   /**
    * Logs a successful scan event to the minimal 'scan_activity' table.
-   * This is crucial for counting user scans later without heavy bucket operations.
+   * This is crucial for counting user scans later without heavy operations.
    */
-  const logScanActivity = async (diseaseId: string, bucketFilePath: string, accuracyScore: number) => {
+  const logScanActivity = async (diseaseId: string, cloudinaryUrl: string, accuracyScore: number) => {
     if (!session?.user) {
       console.error("Cannot log scan: No authenticated user");
       Alert.alert(
@@ -79,7 +78,7 @@ function ScanScreen() {
         .insert([
           { 
             disease_id: diseaseId,
-            bucket_file_path: bucketFilePath,
+            bucket_file_path: cloudinaryUrl,  // Now stores Cloudinary URL
             user_id: session.user.id,  // Explicitly set user_id
             accuracy_score: accuracyScore  // Add accuracy score
           }
@@ -101,7 +100,7 @@ function ScanScreen() {
           );
         }
       } else {
-        console.log("Scan logged successfully to scan_activity.");
+        console.log("Scan logged successfully to scan_activity with Cloudinary URL.");
         // Emit event to notify other screens to refresh their stats
         eventEmitter.emit(EVENTS.SCAN_COMPLETED, {
           diseaseId,
@@ -120,9 +119,9 @@ function ScanScreen() {
   };
 
   /**
-   * Uploads a local file URI to Supabase Storage and returns the file path.
+   * Uploads an optimized/compressed image to Cloudinary and returns the URL.
    */
-  const uploadToBucket = async (uri: string): Promise<string | null> => {
+  const uploadToCloudinary = async (uri: string): Promise<string | null> => {
     if (!session?.user) {
       console.error("No authenticated user session found for upload.");
       Alert.alert(
@@ -135,38 +134,59 @@ function ScanScreen() {
       return null;
     }
 
-    // 2. Prepare file metadata
-    const fileExt = uri.split('.').pop() || 'jpg';
-    // Create a unique path: e.g., 'user_id/timestamp.jpg'
-    const filePath = `${session.user.id}/${Date.now()}.${fileExt}`;
-    
-    // 3. Prepare the file/blob structure for React Native
-    const file = {
-      uri: uri,
-      name: filePath, 
-      type: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
-    } as any; 
-
     try {
-      // 4. Perform the upload
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: file.type,
-        });
-
-      if (uploadError) {
-        console.error("Supabase Upload Error:", uploadError.message);
-        return null;
+      const cloudName = "cropguard";
+      const uploadPreset = "CropGuard";
+      
+      console.log('Starting Cloudinary upload:', { uri, cloudName });
+      
+      // Create FormData for Cloudinary upload
+      const formData = new FormData();
+      formData.append('file', {
+        uri: uri,
+        type: 'image/jpeg',
+        name: `scan_${Date.now()}.jpg`,
+      } as any);
+      formData.append('upload_preset', uploadPreset);
+      formData.append('folder', `scans/${session.user.id}`);
+      
+      // Cloudinary transformation parameters for optimization
+      // These will compress and optimize the image automatically
+      formData.append('quality', 'auto:good'); // Auto quality optimization
+      formData.append('fetch_format', 'auto'); // Auto format selection (WebP, etc.)
+      
+      // Upload to Cloudinary
+      const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+      const response = await fetch(cloudinaryUrl, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Cloudinary upload failed: ${errorData.error?.message || response.statusText}`);
       }
       
-      // 5. Return the full file path 
-      return filePath;
+      const data = await response.json();
+      console.log('Cloudinary upload successful:', { 
+        url: data.secure_url,
+        publicId: data.public_id,
+        format: data.format,
+        bytes: data.bytes
+      });
+      
+      // Return the secure HTTPS URL of the uploaded image
+      return data.secure_url;
 
     } catch (e) {
-      console.error("General Upload Error:", e);
+      console.error("Cloudinary Upload Error:", e);
+      if (e instanceof Error) {
+        Alert.alert(
+          "Upload Error",
+          `Failed to upload image: ${e.message}`,
+          [{ text: "OK" }]
+        );
+      }
       return null;
     }
   };
@@ -191,7 +211,7 @@ function ScanScreen() {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 1,
+        quality: 0.4, // Compress to 40% quality
         base64: false,
       });
 
@@ -230,13 +250,13 @@ function ScanScreen() {
         const topDiseaseId = topPredictionEntry ? topPredictionEntry[0] : null;
 
         if (assetUri && topDiseaseId) { 
-          // A. Upload the image to the Supabase Bucket
-          const uploadedPath = await uploadToBucket(assetUri);
+          // A. Upload the optimized image to Cloudinary
+          const cloudinaryUrl = await uploadToCloudinary(assetUri);
           
-          if (uploadedPath) {
-            // B. Log the successful scan with the image path and prediction
+          if (cloudinaryUrl) {
+            // B. Log the successful scan with the Cloudinary URL and prediction
             const accuracyScore = topPredictionEntry[1] as number;
-            await logScanActivity(topDiseaseId, uploadedPath, accuracyScore);
+            await logScanActivity(topDiseaseId, cloudinaryUrl, accuracyScore);
           }
         }
         
@@ -304,13 +324,13 @@ function ScanScreen() {
         const topDiseaseId = topPredictionEntry ? topPredictionEntry[0] : null;
 
         if (photoUriFromCamera && topDiseaseId) {
-          // A. Upload the image to the Supabase Bucket
-          const uploadedPath = await uploadToBucket(photoUriFromCamera);
+          // A. Upload the optimized image to Cloudinary
+          const cloudinaryUrl = await uploadToCloudinary(photoUriFromCamera);
           
-          if (uploadedPath) {
-            // B. Log the successful scan with the image path and prediction
+          if (cloudinaryUrl) {
+            // B. Log the successful scan with the Cloudinary URL and prediction
             const accuracyScore = topPredictionEntry[1] as number;
-            await logScanActivity(topDiseaseId, uploadedPath, accuracyScore);
+            await logScanActivity(topDiseaseId, cloudinaryUrl, accuracyScore);
           }
         }
 
