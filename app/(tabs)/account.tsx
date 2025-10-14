@@ -26,6 +26,14 @@ interface Profile {
     avatar_url: string | null;
 }
 
+// Define the structure for fetched statistics of disease data
+interface UserStats {
+    plantsScanned: number;
+    diseasesDetected: number;
+    healthyScans: number;
+    accuracy: string; // e.g., "94%"
+}
+
 // Account component no longer needs the session prop, it uses Context
 export default function Account() {
     
@@ -39,11 +47,11 @@ export default function Account() {
     const [loadingProfile, setLoadingProfile] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
 
-    // Dummy statistics (for now, until you implement a stats table)
-    const [stats] = useState({
-        plantsScanned: 47,
-        diseasesDetected: 12,
-        accuracy: "94%",
+    const [userStats, setUserStats] = useState<UserStats>({ 
+        plantsScanned: 0, 
+        diseasesDetected: 0, 
+        healthyScans: 0,
+        accuracy: '0%' 
     });
     
     // Convert join date for display
@@ -64,6 +72,61 @@ export default function Account() {
         
         return profile?.username || 'New User';
     };
+
+async function fetchUserStats() {
+    if (!session?.user) return;
+
+    try {
+        // 1. Get TOTAL SCANS: Count all entries for the user
+        const { count: totalCount, error: totalError } = await supabase
+            .from('scan_activity')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', session.user.id);
+            
+        if (totalError) throw totalError;
+
+        // 2. Get HEALTHY SCANS: Count entries where 'disease_id' ends with 'healthy'
+        const { count: healthyCount, error: healthyError } = await supabase
+            .from('scan_activity')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', session.user.id)
+            .ilike('disease_id', '%healthy'); // The '%' acts as a wildcard
+
+        if (healthyError) throw healthyError;
+
+        // 3. Get average accuracy score
+        const { data: accuracyData, error: accuracyError } = await supabase
+            .from('scan_activity')
+            .select('accuracy_score')
+            .eq('user_id', session.user.id);
+
+        if (accuracyError) throw accuracyError;
+        
+        // Calculate average accuracy
+        const avgAccuracy = accuracyData?.length 
+            ? (accuracyData.reduce((sum, item) => sum + (item.accuracy_score || 0), 0) / accuracyData.length)
+            : 0;
+        
+        // 4. Calculate final stats
+        const plantsScanned = totalCount || 0;
+        const healthyScans = healthyCount || 0;
+        const diseasesDetected = plantsScanned - healthyScans;
+
+        setUserStats({
+            plantsScanned,
+            healthyScans,
+            diseasesDetected,
+            accuracy: `${Math.round(avgAccuracy * 100)}%`
+        });
+        
+    } catch (error) {
+        if (error instanceof Error) {
+            console.error('Error fetching user stats:', error.message);
+        }
+    }
+}
+
+
     /**
      * Fetches the user's profile data from the 'profiles' table.
      */
@@ -107,9 +170,11 @@ export default function Account() {
         
         if (session) {
             getProfile();
+            fetchUserStats();
         } else {
             setProfile(null);
             setLoadingProfile(false);
+            setUserStats({ plantsScanned: 0, healthyScans: 0, diseasesDetected: 0, accuracy: '0%' }); // Reset stats on logout
         }
     }, [session]);
 
@@ -195,24 +260,24 @@ export default function Account() {
                     <View style={styles.statsRow}>
                         <View style={styles.statCard}>
                             <Ionicons name="camera" size={28} color={Green} />
-                            <Text style={styles.statNumber}>{stats.plantsScanned}</Text>
+                            <Text style={styles.statNumber}>{userStats.plantsScanned}</Text>
                             <Text style={styles.statLabel}>Plants Scanned</Text>
                         </View>
                         <View style={styles.statCard}>
                             <Ionicons name="bug" size={28} color="#E53E3E" />
-                            <Text style={styles.statNumber}>{stats.diseasesDetected}</Text>
+                            <Text style={styles.statNumber}>{userStats.diseasesDetected}</Text>
                             <Text style={styles.statLabel}>Diseases Found</Text>
                         </View>
                     </View>
                     <View style={styles.statsRow}>
                         <View style={styles.statCard}>
                             <Ionicons name="checkmark-circle" size={28} color={Yellow} />
-                            <Text style={styles.statNumber}>{stats.accuracy}</Text>
+                            <Text style={styles.statNumber}>{userStats.accuracy}</Text>
                             <Text style={styles.statLabel}>Accuracy Rate</Text>
                         </View>
                         <View style={styles.statCard}>
                             <Ionicons name="leaf" size={28} color={Green} />
-                            <Text style={styles.statNumber}>{stats.plantsScanned - stats.diseasesDetected}</Text>
+                            <Text style={styles.statNumber}>{userStats.healthyScans}</Text>
                             <Text style={styles.statLabel}>Healthy Plants</Text>
                         </View>
                     </View>
