@@ -191,40 +191,32 @@ const AllDiseases = () => {
               </View>
             </View>
 
-            {/* Disease Grid */}
-            <View style={styles.gridContainer}>
-              <FlatList
-                data={filteredDiseases}
-                keyExtractor={(item) => item.id}
-                numColumns={2}
-                scrollEnabled={false}
-                ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-                columnWrapperStyle={styles.row}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.diseaseCard}
-                    onPress={() => router.push(item.page || `/details/${item.id}` as any)}
-                    activeOpacity={0.7}
-                  >
-                    {/* Disease Image */}
-                    <View style={styles.imageContainer}>
-                      {item.image_url ? ( 
-                        <Image 
-                          source={{ uri: item.image_url }} 
-                          style={styles.diseaseImage} 
-                        />
-                      ) : (
-                        <View style={styles.placeholderContainer}>
-                          <Ionicons 
-                            name={getCategoryIcon(item.category) as any} 
-                            size={40} 
-                            color={Green} 
-                          />
-                        </View>
-                      )}
-                      <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
-                        <Text style={styles.severityText}>{item.severity}</Text>
-                      </View>
+        {/* Disease Grid */}
+        <View style={styles.gridContainer}>
+          <FlatList
+            data={filteredDiseases}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            scrollEnabled={false}
+            ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+            columnWrapperStyle={styles.row}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.diseaseCard}
+                onPress={() => router.push(`/details/${item.id}` as any)}
+                activeOpacity={0.7}
+              >
+                {/* Disease Image */}
+                <View style={styles.imageContainer}>
+                  {item.image ? (
+                    <Image source={item.image} style={styles.diseaseImage} />
+                  ) : (
+                    <View style={styles.placeholderContainer}>
+                      <Ionicons 
+                        name={getCategoryIcon(item.category) as any} 
+                        size={40} 
+                        color={Green} 
+                      />
                     </View>
 
                     {/* Disease Info */}
