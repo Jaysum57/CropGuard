@@ -1,3 +1,5 @@
+//TODO: How to get env variables working in Expo after deploying?
+
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
 
