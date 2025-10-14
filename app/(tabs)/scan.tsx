@@ -60,7 +60,7 @@ function ScanScreen() {
    * Logs a successful scan event to the minimal 'scan_activity' table.
    * This is crucial for counting user scans later without heavy bucket operations.
    */
-  const logScanActivity = async (diseaseId: string, bucketFilePath: string) => {
+  const logScanActivity = async (diseaseId: string, bucketFilePath: string, accuracyScore: number) => {
     if (!session?.user) {
       console.error("Cannot log scan: No authenticated user");
       Alert.alert(
@@ -78,7 +78,8 @@ function ScanScreen() {
           { 
             disease_id: diseaseId,
             bucket_file_path: bucketFilePath,
-            user_id: session.user.id  // Explicitly set user_id
+            user_id: session.user.id,  // Explicitly set user_id
+            accuracy_score: accuracyScore  // Add accuracy score
           }
         ]);
 
@@ -226,7 +227,8 @@ function ScanScreen() {
           
           if (uploadedPath) {
             // B. Log the successful scan with the image path and prediction
-            await logScanActivity(topDiseaseId, uploadedPath);
+            const accuracyScore = topPredictionEntry[1] as number;
+            await logScanActivity(topDiseaseId, uploadedPath, accuracyScore);
           }
         }
         
@@ -299,7 +301,8 @@ function ScanScreen() {
           
           if (uploadedPath) {
             // B. Log the successful scan with the image path and prediction
-            await logScanActivity(topDiseaseId, uploadedPath);
+            const accuracyScore = topPredictionEntry[1] as number;
+            await logScanActivity(topDiseaseId, uploadedPath, accuracyScore);
           }
         }
 
