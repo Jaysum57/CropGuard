@@ -191,7 +191,7 @@ function UserHistoryScreen() {
       </Text>
       <TouchableOpacity
         style={styles.scanButton}
-        onPress={() => router.back()}
+        onPress={() => router.push("./scan")}
       >
         <Ionicons name="camera" size={20} color="#fff" />
         <Text style={styles.scanButtonText}>Start Scanning</Text>

@@ -27,7 +27,7 @@ interface UserStats {
 
 class ProfileCache {
   private cache: Map<string, CacheEntry<any>>;
-  private readonly CACHE_DURATION = 10 * 60 * 1000; // 10 minutes TTL
+  private readonly CACHE_DURATION = 60 * 60 * 1000; // can be configured
   private readonly STORAGE_PREFIX = 'cropguard_profile_cache_';
 
   constructor() {
@@ -114,7 +114,7 @@ class ProfileCache {
 
     this.cache.set(key, entry);
     this.saveToStorage(key, entry);
-    console.log(`✅ Profile cached for user ${userId} (expires in 10 minutes)`);
+    console.log(`✅ Profile cached for user ${userId} (expires in ${this.CACHE_DURATION / 60000} minutes)`);
   }
 
   /**
@@ -155,7 +155,7 @@ class ProfileCache {
 
     this.cache.set(key, entry);
     this.saveToStorage(key, entry);
-    console.log(`✅ Stats cached for user ${userId} (expires in 10 minutes)`);
+    console.log(`✅ Stats cached for user ${userId} (expires in ${this.CACHE_DURATION / 60000} minutes)`);
   }
 
   /**
