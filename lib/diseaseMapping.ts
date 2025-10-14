@@ -206,7 +206,7 @@ export function isHealthyPrediction(predictionName: string): boolean {
 }
 
 /**
- * Gets a user-friendly display name for a prediction
+ * Gets a user-friendly display name for a prediction (full name with plant)
  * 
  * @param predictionName - The full prediction name from the model
  * @returns A formatted, readable name
@@ -222,10 +222,30 @@ export function getDisplayName(predictionName: string): string {
 }
 
 /**
+ * Gets only the disease name portion, formatted for display
+ * Example: "Apple___Apple_scab" -> "Apple Scab"
+ *          "Tomato___Early_blight" -> "Early Blight"
+ *          "Corn___healthy" -> "Healthy"
+ * 
+ * @param predictionName - The full prediction name from the model
+ * @returns Just the disease name, formatted and capitalized
+ */
+export function getDiseaseDisplayName(predictionName: string): string {
+  const diseaseName = extractDiseaseName(predictionName);
+  
+  return diseaseName
+    .replace(/_/g, ' ')              // Replace _ with spaces
+    .replace(/\(.*?\)/g, '')         // Remove parentheses content
+    .replace(/\s+/g, ' ')            // Clean up multiple spaces
+    .trim()
+    .replace(/\b\w/g, l => l.toUpperCase()); // Capitalize words
+}
+
+/**
  * Helper to get routing information for a prediction
  * 
  * @param predictionName - The full prediction name from the model
- * @returns Object with diseaseId and isRoutable flag
+ * @returns Object with diseaseId, isRoutable flag, and disease name only (without plant name)
  */
 export function getRoutingInfo(predictionName: string): {
   diseaseId: string | null;
@@ -235,7 +255,7 @@ export function getRoutingInfo(predictionName: string): {
   console.log('📍 [ROUTING] Getting routing info for:', predictionName);
   
   const diseaseId = mapPredictionToDiseaseId(predictionName);
-  const displayName = getDisplayName(predictionName);
+  const displayName = getDiseaseDisplayName(predictionName); // Use disease name only
   
   const routingInfo = {
     diseaseId,

@@ -26,6 +26,7 @@ const OffWhite = "#F6F6F6";
 interface ScanHistory {
   id: string;
   disease_id: string;
+  disease_name: string;      // Formatted disease name (e.g., "Early Blight")
   bucket_file_path: string; // Cloudinary URL
   accuracy_score: number;
   scanned_at: string;
@@ -123,16 +124,10 @@ function UserHistoryScreen() {
     return date.toLocaleDateString("en-US", options);
   };
 
-  const formatDiseaseName = (diseaseId: string) => {
-    return diseaseId
-      .replace(/-/g, " ")
-      .replace(/\b\w/g, (l) => l.toUpperCase());
-  };
-
   const renderHistoryItem = ({ item }: { item: ScanHistory }) => {
-    const diseaseName = formatDiseaseName(item.disease_id);
+    const diseaseName = item.disease_name; // Use the formatted disease_name from database
     const accuracyPercent = (item.accuracy_score * 100).toFixed(1);
-    const isHealthy = item.disease_id.toLowerCase().includes("healthy");
+    const isHealthy = item.disease_name.toLowerCase().includes("healthy");
 
     return (
       <TouchableOpacity
@@ -282,19 +277,19 @@ function UserHistoryScreen() {
                   <View style={styles.modalHeader}>
                     <Ionicons
                       name={
-                        selectedItem.disease_id.toLowerCase().includes("healthy")
+                        selectedItem.disease_name.toLowerCase().includes("healthy")
                           ? "checkmark-circle"
                           : "alert-circle"
                       }
                       size={32}
                       color={
-                        selectedItem.disease_id.toLowerCase().includes("healthy")
+                        selectedItem.disease_name.toLowerCase().includes("healthy")
                           ? Green
                           : "#FF8C00"
                       }
                     />
                     <Text style={styles.modalDiseaseName}>
-                      {formatDiseaseName(selectedItem.disease_id)}
+                      {selectedItem.disease_name}
                     </Text>
                   </View>
 

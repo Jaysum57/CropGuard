@@ -18,7 +18,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getRoutingInfo } from "../../lib/diseaseMapping";
+import { getRoutingInfo, mapPredictionToDiseaseId } from "../../lib/diseaseMapping";
 import { eventEmitter, EVENTS } from "../../lib/eventEmitter";
 import { supabase } from "../../lib/supabase";
 
@@ -60,10 +60,22 @@ function ScanScreen() {
   // --- NEW UTILITY FUNCTIONS ---
 
   /**
+   * Formats a disease ID by removing underscores and capitalizing each word
+   * Example: "early_blight" -> "Early Blight"
+   */
+  const formatDiseaseId = (diseaseId: string): string => {
+    return diseaseId
+      .split('_')                           // Split by underscore
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()) // Capitalize first letter
+      .join(' ');                          // Join with space
+  };
+
+  /**
    * Logs a successful scan event to the minimal 'scan_activity' table.
    * This is crucial for counting user scans later without heavy operations.
+   * Now stores both raw disease_id and formatted disease_name.
    */
-  const logScanActivity = async (diseaseId: string, cloudinaryUrl: string, accuracyScore: number) => {
+  const logScanActivity = async (diseaseId: string, diseaseName: string, cloudinaryUrl: string, accuracyScore: number) => {
     if (!session?.user) {
       console.error("Cannot log scan: No authenticated user");
       Alert.alert(
@@ -75,15 +87,19 @@ function ScanScreen() {
     }
 
     try {
-      console.log("Accuracy score:", accuracyScore);
+      console.log("💾 [LOGGING] Accuracy score:", accuracyScore);
+      console.log("💾 [LOGGING] Raw disease_id:", diseaseId);
+      console.log("💾 [LOGGING] Formatted disease_name:", diseaseName);
+      
       const { error } = await supabase
         .from('scan_activity')
         .insert([
           { 
-            disease_id: diseaseId,
-            bucket_file_path: cloudinaryUrl,  // Now stores Cloudinary URL
-            user_id: session.user.id,  // Explicitly set user_id
-            accuracy_score: accuracyScore  // Add accuracy score
+            disease_id: diseaseId,            // Raw ID (e.g., "early_blight")
+            disease_name: diseaseName,        // Formatted name (e.g., "Early Blight")
+            bucket_file_path: cloudinaryUrl,  // Cloudinary URL
+            user_id: session.user.id,         // User ID
+            accuracy_score: accuracyScore     // Accuracy score
           }
         ]);
 
@@ -103,10 +119,11 @@ function ScanScreen() {
           );
         }
       } else {
-        console.log("Scan logged successfully to scan_activity with Cloudinary URL.");
+        console.log("✅ [LOGGING] Scan logged successfully with both disease_id and disease_name");
         // Emit event to notify other screens to refresh their stats
         eventEmitter.emit(EVENTS.SCAN_COMPLETED, {
           diseaseId,
+          diseaseName,
           accuracyScore,
           timestamp: new Date().toISOString(),
         });
@@ -255,16 +272,31 @@ function ScanScreen() {
         // 3. LOGIC FOR UPLOAD & LOGGING
         const topPredictionEntry = Object.entries(resultJson.predictions)
             .sort(([, a], [, b]) => (b as number) - (a as number))[0];
-        const topDiseaseId = topPredictionEntry ? topPredictionEntry[0] : null;
+        const topPrediction = topPredictionEntry ? topPredictionEntry[0] : null;
 
-        if (assetUri && topDiseaseId) { 
-          // A. Upload the optimized image to Cloudinary
-          const cloudinaryUrl = await uploadToCloudinary(assetUri);
+        if (assetUri && topPrediction) { 
+          // Map the raw prediction to the standardized disease ID
+          const mappedDiseaseId = mapPredictionToDiseaseId(topPrediction);
           
-          if (cloudinaryUrl) {
-            // B. Log the successful scan with the Cloudinary URL and prediction
-            const accuracyScore = topPredictionEntry[1] as number;
-            await logScanActivity(topDiseaseId, cloudinaryUrl, accuracyScore);
+          console.log('💾 [LOGGING] Raw prediction:', topPrediction);
+          console.log('💾 [LOGGING] Mapped disease ID:', mappedDiseaseId);
+          
+          // Only log if we have a valid disease (not healthy/null)
+          if (mappedDiseaseId) {
+            // Format the disease ID (remove underscores, capitalize words)
+            const formattedDiseaseName = formatDiseaseId(mappedDiseaseId);
+            console.log('💾 [LOGGING] Formatted disease name:', formattedDiseaseName);
+            
+            // A. Upload the optimized image to Cloudinary
+            const cloudinaryUrl = await uploadToCloudinary(assetUri);
+            
+            if (cloudinaryUrl) {
+              // B. Log the successful scan with both raw ID and formatted name
+              const accuracyScore = topPredictionEntry[1] as number;
+              await logScanActivity(mappedDiseaseId, formattedDiseaseName, cloudinaryUrl, accuracyScore);
+            }
+          } else {
+            console.log('💾 [LOGGING] Skipping log - healthy plant or unmapped disease');
           }
         }
         
@@ -334,16 +366,31 @@ function ScanScreen() {
         // 2. LOGIC FOR UPLOAD & LOGGING
         const topPredictionEntry = Object.entries(resultJson.predictions)
             .sort(([, a], [, b]) => (b as number) - (a as number))[0];
-        const topDiseaseId = topPredictionEntry ? topPredictionEntry[0] : null;
+        const topPrediction = topPredictionEntry ? topPredictionEntry[0] : null;
 
-        if (photoUriFromCamera && topDiseaseId) {
-          // A. Upload the optimized image to Cloudinary
-          const cloudinaryUrl = await uploadToCloudinary(photoUriFromCamera);
+        if (photoUriFromCamera && topPrediction) {
+          // Map the raw prediction to the standardized disease ID
+          const mappedDiseaseId = mapPredictionToDiseaseId(topPrediction);
           
-          if (cloudinaryUrl) {
-            // B. Log the successful scan with the Cloudinary URL and prediction
-            const accuracyScore = topPredictionEntry[1] as number;
-            await logScanActivity(topDiseaseId, cloudinaryUrl, accuracyScore);
+          console.log('💾 [LOGGING] Raw prediction:', topPrediction);
+          console.log('💾 [LOGGING] Mapped disease ID:', mappedDiseaseId);
+          
+          // Only log if we have a valid disease (not healthy/null)
+          if (mappedDiseaseId) {
+            // Format the disease ID (remove underscores, capitalize words)
+            const formattedDiseaseName = formatDiseaseId(mappedDiseaseId);
+            console.log('💾 [LOGGING] Formatted disease name:', formattedDiseaseName);
+            
+            // A. Upload the optimized image to Cloudinary
+            const cloudinaryUrl = await uploadToCloudinary(photoUriFromCamera);
+            
+            if (cloudinaryUrl) {
+              // B. Log the successful scan with both raw ID and formatted name
+              const accuracyScore = topPredictionEntry[1] as number;
+              await logScanActivity(mappedDiseaseId, formattedDiseaseName, cloudinaryUrl, accuracyScore);
+            }
+          } else {
+            console.log('💾 [LOGGING] Skipping log - healthy plant or unmapped disease');
           }
         }
 
@@ -868,12 +915,15 @@ function ScanScreen() {
                     .slice(1, 4) // Show next 3 predictions
                     .map(([plant, confidence], index) => {
                       const confidencePercent = ((confidence as number) * 100).toFixed(1);
-                      const cleanPlantName = plant.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                      
+                      // Use getRoutingInfo to get the formatted disease name
+                      const routingInfo = getRoutingInfo(plant);
+                      const diseaseName = routingInfo.displayName;
                       
                       return (
                         <View key={plant} style={styles.additionalPredictionItem}>
                           <View style={styles.additionalPredictionContent}>
-                            <Text style={styles.additionalPlantName}>{cleanPlantName}</Text>
+                            <Text style={styles.additionalPlantName}>{diseaseName}</Text>
                             <Text style={styles.additionalConfidence}>{confidencePercent}%</Text>
                           </View>
                           <View style={styles.additionalPredictionBar}>
