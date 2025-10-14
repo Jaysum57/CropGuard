@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Href, useRouter } from "expo-router";
-import React, { useContext, useEffect, useState } from "react"; // ADDED: useState, useEffect, useContext
+import React, { useContext, useEffect, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -14,8 +14,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getAllDiseases } from "../../components/DiseaseData";
-import { supabase } from '../../lib/supabase'; // ADDED: supabase import
-import { SessionContext } from './_layout'; // ADDED: SessionContext import
+import { supabase } from '../../lib/supabase';
+import { SessionContext } from './_layout';
 
 const screenWidth = Dimensions.get("window").width;
 const CARD_WIDTH = screenWidth * 0.7;
@@ -26,8 +26,14 @@ const DarkGreen = "#021A1A";
 
 // Define the structure for the profile data we will fetch
 interface Profile {
-    first_name: string | null;
-    username: string | null;
+  first_name: string | null;
+  username: string | null;
+}
+
+// Define the structure for fetched statistics of disease data
+interface UserStats {
+  plantsScanned: number;
+  lastScan: string | null; 
 }
 
 type Disease = {
@@ -77,7 +83,44 @@ const quickActions = [
   },
 ];
 
-// Removed hardcoded user object
+// Helper function to format last scan time as relative time (minutes, hours, or days ago).
+function formatLastScanTime(timestamp: string | undefined): { relativeTime: string, fullDate: string } {
+    if (!timestamp || timestamp === "Never") {
+        return { relativeTime: "Never", fullDate: "" };
+    }
+
+    const scanDate = new Date(timestamp);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - scanDate.getTime()) / 1000);
+    
+    // Fallback: full date string (e.g., Oct 14, 2025)
+    const fullDate = diffInSeconds >= 86400 ? scanDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    }) : '';
+
+    let relativeTime: string;
+
+    if (diffInSeconds < 60) {
+        // Less than 1 minute
+        relativeTime = "Just now";
+    } else if (diffInSeconds < 3600) {
+        // Less than 1 hour (minutes)
+        const minutes = Math.floor(diffInSeconds / 60);
+        relativeTime = `${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`;
+    } else if (diffInSeconds < 86400) {
+        // Less than 24 hours (hours)
+        const hours = Math.floor(diffInSeconds / 3600);
+        relativeTime = `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    } else {
+        // 24 hours or more (days)
+        const days = Math.floor(diffInSeconds / 86400);
+        relativeTime = `${days} ${days === 1 ? 'day' : 'days'} ago`;
+    }
+
+    return { relativeTime, fullDate };
+}
 
 export default function Index() {
   const router = useRouter();
@@ -87,17 +130,69 @@ export default function Index() {
   
   // 2. State for the user's profile
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loadingProfile, setLoadingProfile] = useState(true); // Start true
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
-  // 3. Dummy statistics (for now)
-  const [stats] = useState({
-      plantsScanned: 47,
-      lastScan: "2 hours ago",
+  // 3. UPDATED: State for real user statistics
+  const [stats, setStats] = useState<UserStats>({
+    plantsScanned: 0,
+    lastScan: null,
   });
 
   /**
-   * 4. Function to fetch the user's profile data
+   * REFACTORED: Function to fetch aggregate scan statistics (Count & Last Scan Time)
+   * This uses a more robust two-step Supabase query to ensure reliability even with zero logs.
    */
+  async function getScanStats(userId: string) {
+    try {
+      // 1. Get the total count of scans
+      const { count, error: countError } = await supabase
+        .from('scan_activity')
+        .select('*', { head: true, count: 'exact' }) // Use head: true for count
+        .eq('user_id', userId);
+
+      if (countError) {
+        console.error("Error fetching scan count:", countError.message);
+        return;
+      }
+      
+      let plantsScanned = count || 0;
+      let lastScanTime: string | null = null;
+
+      // 2. Get the last scan time (max timestamp) if there are any scans
+      if (plantsScanned > 0) {
+        // Fetch the single latest scan time
+        const { data: latestData, error: latestError } = await supabase
+          .from('scan_activity')
+          .select('scanned_at')
+          .eq('user_id', userId)
+          .order('scanned_at', { ascending: false })
+          .limit(1)
+          .single(); // Since we use limit(1), single() is appropriate
+
+        // Handle error, but skip the "No rows found" error (PGRST116) as it's unexpected here
+        if (latestError && latestError.code !== 'PGRST116') {
+          console.error("Error fetching last scan time:", latestError.message);
+        } else if (latestData && latestData.scanned_at) {
+          lastScanTime = latestData.scanned_at;
+        }
+      }
+
+      setStats({
+        plantsScanned: plantsScanned,
+        lastScan: lastScanTime,
+      });
+
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error("Error in getScanStats:", error.message);
+      }
+    }
+  }
+
+
+  /**
+    * 4. Function to fetch the user's profile data
+    */
   async function getProfile() {
       if (!session?.user) {
           setProfile(null);
@@ -110,7 +205,8 @@ export default function Index() {
           const { data, error } = await supabase
               .from('profiles')
               .select(`first_name, username`) 
-              .eq('id', session.user.id);
+              .eq('id', session.user.id)
+              .single(); // Use single() since 'id' is a primary key
 
           if (error) {
               console.error("Error fetching profile for index:", error.message);
@@ -118,11 +214,10 @@ export default function Index() {
               return;
           }
 
-          // Check if we got any results
-          if (data && data.length > 0) {
-              setProfile(data[0] as Profile);
+          // data will be the object if single() succeeds, or null if not found
+          if (data) {
+              setProfile(data as Profile);
           } else {
-              // No profile found - this is a valid case for new users
               setProfile(null);
           }
       } catch (error) {
@@ -140,10 +235,12 @@ export default function Index() {
       // Only try to fetch if the session is not null
       if (session) {
           getProfile();
+          getScanStats(session.user.id); // Fetch stats for the logged-in user
       } else {
           // If session is null (logged out), clear profile
           setProfile(null);
           setLoadingProfile(false);
+          setStats({ plantsScanned: 0, lastScan: "Never" }); // Reset stats
       }
   }, [session]);
 
@@ -152,7 +249,7 @@ export default function Index() {
     profile?.first_name || 
     profile?.username || 
     session?.user.email?.split('@')[0] || // Use part of the email as a robust fallback
-    (isSessionLoading || loadingProfile ? "Loading" : "New User");
+    (isSessionLoading || loadingProfile ? "Loading..." : "New User");
 
 
   return (
@@ -181,7 +278,14 @@ export default function Index() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{stats.lastScan}</Text> 
+              <Text style={styles.statNumber}>
+                {stats.lastScan ? formatLastScanTime(stats.lastScan).relativeTime : "Never"}
+              </Text>
+              {stats.lastScan && formatLastScanTime(stats.lastScan).fullDate && (
+                <Text style={styles.statDate}>
+                  {formatLastScanTime(stats.lastScan).fullDate}
+                </Text>
+              )}
               <Text style={styles.statLabel}>Last Scan</Text>
             </View>
           </View>
@@ -360,6 +464,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
     fontWeight: "500",
+  },
+  statDate: {
+    fontSize: 9,
+    color: "#666",
+    marginTop: -4,
+    marginBottom: 4,
   },
   statDivider: {
     width: 1,

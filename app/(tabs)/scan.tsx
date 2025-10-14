@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Session } from '@supabase/supabase-js';
 import { CameraType, CameraView, FlashMode, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
   Modal,
@@ -15,18 +17,159 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { supabase } from "../../lib/supabase";
 
 const { width: screenWidth } = Dimensions.get("window");
 const Green = "#30BE63";
 const Yellow = "#FFD94D";
 const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
+const BUCKET_NAME = 'plants_scanned'; // Your Supabase Bucket Name
 
 function ScanScreen() {
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [processingVisible, setProcessingVisible] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [flash, setFlash] = useState<FlashMode>('off');
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [session, setSession] = useState<Session | null>(null);
+
+  useEffect(() => {
+    // Check for an existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const cameraRef = useRef<any>(null);
+
+  // --- NEW UTILITY FUNCTIONS ---
+
+  /**
+   * Logs a successful scan event to the minimal 'scan_activity' table.
+   * This is crucial for counting user scans later without heavy bucket operations.
+   */
+  const logScanActivity = async (diseaseId: string, bucketFilePath: string) => {
+    if (!session?.user) {
+      console.error("Cannot log scan: No authenticated user");
+      Alert.alert(
+        "Authentication Required",
+        "Please sign in to save your scan history.",
+        [{ text: "OK", onPress: () => setModalVisible(false) }]
+      );
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('scan_activity')
+        .insert([
+          { 
+            disease_id: diseaseId,
+            bucket_file_path: bucketFilePath,
+            user_id: session.user.id  // Explicitly set user_id
+          }
+        ]);
+
+      if (error) {
+        console.error("Supabase Logging Error (scan_activity):", error.message);
+        if (error.code === 'PGRST301') {
+          Alert.alert(
+            "Permission Error",
+            "You don't have permission to save scans. Please sign in again.",
+            [{ text: "OK", onPress: () => setModalVisible(false) }]
+          );
+        } else {
+          Alert.alert(
+            "Error",
+            "Failed to save scan history. Please try again.",
+            [{ text: "OK", onPress: () => setModalVisible(false) }]
+          );
+        }
+      } else {
+        console.log("Scan logged successfully to scan_activity.");
+      }
+    } catch (e) {
+      console.error("Exception during logging:", e);
+      Alert.alert(
+        "Error",
+        "Failed to save scan history. Please try again.",
+        [{ text: "OK", onPress: () => setModalVisible(false) }]
+      );
+    }
+  };
+
+  /**
+   * Uploads a local file URI to Supabase Storage and returns the file path.
+   */
+  const uploadToBucket = async (uri: string): Promise<string | null> => {
+    if (!session?.user) {
+      console.error("No authenticated user session found for upload.");
+      Alert.alert(
+        "Sign In Required",
+        "Please sign in to save your scans.",
+        [
+          { text: "OK", onPress: () => setModalVisible(false) }
+        ]
+      );
+      return null;
+    }
+
+    // 2. Prepare file metadata
+    const fileExt = uri.split('.').pop() || 'jpg';
+    // Create a unique path: e.g., 'user_id/timestamp.jpg'
+    const filePath = `${session.user.id}/${Date.now()}.${fileExt}`;
+    
+    // 3. Prepare the file/blob structure for React Native
+    const file = {
+      uri: uri,
+      name: filePath, 
+      type: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+    } as any; 
+
+    try {
+      // 4. Perform the upload
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type,
+        });
+
+      if (uploadError) {
+        console.error("Supabase Upload Error:", uploadError.message);
+        return null;
+      }
+      
+      // 5. Return the full file path 
+      return filePath;
+
+    } catch (e) {
+      console.error("General Upload Error:", e);
+      return null;
+    }
+  };
+
+  // --- HANDLERS (UPDATED) ---
+
   const handlePickImage = async () => {
     setLoading(true);
+    let assetUri: string | null = null;
+
     try {
-      // Request permissions first 
+      // 1. Request permissions 
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (permissionResult.granted === false) {
@@ -35,27 +178,103 @@ function ScanScreen() {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 1,
         base64: false,
       });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setPhotoUri(asset.uri);
+
+      if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
+        const asset = pickerResult.assets[0];
+        assetUri = asset.uri; // Store the URI for upload/API call
+        setPhotoUri(assetUri);
         
         // Show processing modal before API call
         setProcessingVisible(true);
         
-        // Create FormData with proper file structure for Android
+        // 2. Call FastAPI
         const formData = new FormData();
         formData.append("file", {
-          uri: asset.uri,
+          uri: assetUri,
           type: "image/jpeg",
           name: "photo.jpg",
         } as any);
+        
+        const apiUrl = "https://jaysum-cropguardfastapi.hf.space/predict";
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          body: formData,
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const resultJson = await response.json();
+        setResult(resultJson);
+
+        // 3. LOGIC FOR UPLOAD & LOGGING
+        const topPredictionEntry = Object.entries(resultJson.predictions)
+            .sort(([, a], [, b]) => (b as number) - (a as number))[0];
+        const topDiseaseId = topPredictionEntry ? topPredictionEntry[0] : null;
+
+        if (assetUri && topDiseaseId) { 
+          // A. Upload the image to the Supabase Bucket
+          const uploadedPath = await uploadToBucket(assetUri);
+          
+          if (uploadedPath) {
+            // B. Log the successful scan with the image path and prediction
+            await logScanActivity(topDiseaseId, uploadedPath);
+          }
+        }
+        
+        // 4. Show results
+        setProcessingVisible(false);
+        setTimeout(() => {
+          setModalVisible(true);
+        }, 300);
+      }
+    } catch (err) {
+      let errorMsg = "Network request failed";
+      if (err instanceof Error) {
+        errorMsg = `${err.name}: ${err.message}`;
+        console.error("Image picker prediction error:", err);
+      }
+      setResult({ error: errorMsg });
+      
+      // Hide processing modal and show error
+      setProcessingVisible(false);
+      setTimeout(() => {
+        setModalVisible(true);
+      }, 300);
+    }
+    setLoading(false);
+  };
+  
+  const handleTakePicture = async () => {
+    if (cameraRef.current) {
+      setLoading(true);
+      let photoUriFromCamera: string | null = null;
+      
+      try {
+        const photo = await cameraRef.current.takePictureAsync({ base64: false });
+        photoUriFromCamera = photo.uri; // Store the URI from the camera
+        setPhotoUri(photoUriFromCamera);
+        setCameraOpen(false);
+
+        // Show processing modal before API call
+        setProcessingVisible(true);
+
+        // 1. Call FastAPI
+        const formData = new FormData();
+        formData.append("file", {
+          uri: photoUriFromCamera,
+          type: "image/jpeg",
+          name: "photo.jpg",
+        } as any);
+
         const apiUrl = "https://jaysum-cropguardfastapi.hf.space/predict";
         const response = await fetch(apiUrl, {
           method: "POST",
@@ -69,42 +288,47 @@ function ScanScreen() {
         const resultJson = await response.json();
         setResult(resultJson);
         
-        // Hide processing modal and show results with small delay
+        // 2. LOGIC FOR UPLOAD & LOGGING
+        const topPredictionEntry = Object.entries(resultJson.predictions)
+            .sort(([, a], [, b]) => (b as number) - (a as number))[0];
+        const topDiseaseId = topPredictionEntry ? topPredictionEntry[0] : null;
+
+        if (photoUriFromCamera && topDiseaseId) {
+          // A. Upload the image to the Supabase Bucket
+          const uploadedPath = await uploadToBucket(photoUriFromCamera);
+          
+          if (uploadedPath) {
+            // B. Log the successful scan with the image path and prediction
+            await logScanActivity(topDiseaseId, uploadedPath);
+          }
+        }
+
+        // 3. Show results
+        setProcessingVisible(false);
+        setTimeout(() => {
+          setModalVisible(true);
+        }, 300);
+      } catch (err) {
+        let errorMsg = "Network request failed";
+        if (err instanceof Error) {
+          errorMsg = `${err.name}: ${err.message}`;
+          console.error("Camera prediction error:", err);
+        }
+        setResult({ error: errorMsg });
+        
+        // Hide processing modal and show error
         setProcessingVisible(false);
         setTimeout(() => {
           setModalVisible(true);
         }, 300);
       }
-    } catch (err) {
-      let errorMsg = "Network request failed";
-      if (err instanceof Error) {
-        errorMsg = `${err.name}: ${err.message}`;
-        console.error("Image picker prediction error:", err);
-        console.error("Full error details:", JSON.stringify(err, null, 2));
-      }
-      setResult({ error: errorMsg });
-      
-      // Hide processing modal and show error with small delay
-      setProcessingVisible(false);
-      setTimeout(() => {
-        setModalVisible(true);
-      }, 300);
+      setLoading(false);
     }
-    setLoading(false);
   };
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [processingVisible, setProcessingVisible] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [facing, setFacing] = useState<CameraType>('back');
-  const [flash, setFlash] = useState<FlashMode>('off');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [permission, requestPermission] = useCameraPermissions();
 
-  const cameraRef = useRef<any>(null);
-
+  // --- UNCHANGED HANDLERS ---
   const testAPI = async () => {
+    // ... (unchanged) ...
     setLoading(true);
     try {
       const apiUrl = "https://jaysum-cropguardfastapi.hf.space/";
@@ -143,62 +367,6 @@ function ScanScreen() {
     setCameraOpen(true);
   };
 
-  const handleTakePicture = async () => {
-    if (cameraRef.current) {
-      setLoading(true);
-      try {
-        const photo = await cameraRef.current.takePictureAsync({ base64: false });
-        setPhotoUri(photo.uri);
-        setCameraOpen(false);
-
-        // Show processing modal before API call
-        setProcessingVisible(true);
-
-        // Prepare form data for FastAPI - Android compatible format
-        const formData = new FormData();
-        formData.append("file", {
-          uri: photo.uri,
-          type: "image/jpeg",
-          name: "photo.jpg",
-        } as any);
-
-        // FastAPI endpoint for prediction
-        const apiUrl = "https://jaysum-cropguardfastapi.hf.space/predict";
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          body: formData,
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const resultJson = await response.json();
-        setResult(resultJson);
-        
-        // Hide processing modal and show results with small delay
-        setProcessingVisible(false);
-        setTimeout(() => {
-          setModalVisible(true);
-        }, 300);
-      } catch (err) {
-        let errorMsg = "Network request failed";
-        if (err instanceof Error) {
-          errorMsg = `${err.name}: ${err.message}`;
-          console.error("Camera prediction error:", err);
-        }
-        setResult({ error: errorMsg });
-        
-        // Hide processing modal and show error with small delay
-        setProcessingVisible(false);
-        setTimeout(() => {
-          setModalVisible(true);
-        }, 300);
-      }
-      setLoading(false);
-    }
-  };
-
   function toggleCameraFacing() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   }
@@ -211,13 +379,13 @@ function ScanScreen() {
     setCameraOpen(false);
   }
 
+  // --- UNCHANGED RENDERING/JSX ---
+
   if (!permission) {
-    // Camera permissions are still loading.
     return <View />;
   }
 
   if (!permission.granted) {
-    // Camera permissions are not granted yet.
     return (
       <View style={styles.container}>
         <Text style={styles.message}>We need your permission to show the camera</Text>
@@ -526,156 +694,156 @@ function ScanScreen() {
                 </View>
               )}
 
-              {/* Loading State */}
-              {loading ? (
-                <View style={styles.modernLoadingContainer}>
-                  <ActivityIndicator size="large" color={Green} />
-                  <Text style={styles.loadingText}>Analyzing your plant...</Text>
-                  <Text style={styles.loadingSubtext}>This may take a few seconds</Text>
+            {/* Loading State */}
+            {loading ? (
+              <View style={styles.modernLoadingContainer}>
+                <ActivityIndicator size="large" color={Green} />
+                <Text style={styles.loadingText}>Analyzing your plant...</Text>
+                <Text style={styles.loadingSubtext}>This may take a few seconds</Text>
+              </View>
+            ) : result?.error ? (
+              <View style={styles.modernErrorContainer}>
+                <View style={styles.errorIconContainer}>
+                  <Ionicons name="alert-circle" size={32} color="#FF6B6B" />
                 </View>
-              ) : result?.error ? (
-                <View style={styles.modernErrorContainer}>
-                  <View style={styles.errorIconContainer}>
-                    <Ionicons name="alert-circle" size={32} color="#FF6B6B" />
-                  </View>
-                  <Text style={styles.modernErrorTitle}>Analysis Failed</Text>
-                  <Text style={styles.modernErrorText}>{result.error}</Text>
-                  <TouchableOpacity style={styles.retryButton} onPress={() => setModalVisible(false)}>
-                    <Ionicons name="refresh" size={20} color="#fff" />
-                    <Text style={styles.retryButtonText}>Try Again</Text>
-                  </TouchableOpacity>
+                <Text style={styles.modernErrorTitle}>Analysis Failed</Text>
+                <Text style={styles.modernErrorText}>{result.error}</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={() => setModalVisible(false)}>
+                  <Ionicons name="refresh" size={20} color="#fff" />
+                  <Text style={styles.retryButtonText}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            ) : result?.predictions ? (
+              <ScrollView 
+                style={styles.modernModalContent} 
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.modalScrollContainer}
+              >
+              {/* Modern Results Section */}
+              <View style={styles.modernResultsSection}>
+                <View style={styles.resultsSectionHeader}>
+                  <Ionicons name="analytics" size={24} color={Green} />
+                  <Text style={styles.modernResultsTitle}>Analysis Results</Text>
                 </View>
-              ) : result?.predictions ? (
-                <ScrollView 
-                  style={styles.modernModalContent} 
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.modalScrollContainer}
-                >
-                {/* Modern Results Section */}
-                <View style={styles.modernResultsSection}>
-                  <View style={styles.resultsSectionHeader}>
-                    <Ionicons name="analytics" size={24} color={Green} />
-                    <Text style={styles.modernResultsTitle}>Analysis Results</Text>
-                  </View>
+                
+                {/* Top Prediction Card */}
+                {(() => {
+                  const topPrediction = Object.entries(result.predictions)
+                    .sort(([,a], [,b]) => (b as number) - (a as number))[0];
+                  const [topPlant, topConfidence] = topPrediction;
+                  const cleanTopPlant = topPlant.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  const confidencePercent = ((topConfidence as number) * 100).toFixed(1);
+                  const isHealthy = topPlant.toLowerCase().includes('healthy');
                   
-                  {/* Top Prediction Card */}
-                  {(() => {
-                    const topPrediction = Object.entries(result.predictions)
-                      .sort(([,a], [,b]) => (b as number) - (a as number))[0];
-                    const [topPlant, topConfidence] = topPrediction;
-                    const cleanTopPlant = topPlant.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    const confidencePercent = ((topConfidence as number) * 100).toFixed(1);
-                    const isHealthy = topPlant.toLowerCase().includes('healthy');
-                    
-                    let statusColor = "#E53E3E";
-                    let statusIcon = "alert-circle";
-                    let statusText = "Needs Attention";
-                    
-                    if ((topConfidence as number) >= 0.8) {
-                      statusColor = isHealthy ? Green : "#FF8C00";
-                      statusIcon = isHealthy ? "checkmark-circle" : "warning";
-                      statusText = isHealthy ? "Healthy Plant" : "Disease Detected";
-                    } else if ((topConfidence as number) >= 0.5) {
-                      statusColor = "#FF8C00";
-                      statusIcon = "help-circle";
-                      statusText = "Uncertain";
-                    }
+                  let statusColor = "#E53E3E";
+                  let statusIcon = "alert-circle";
+                  let statusText = "Needs Attention";
+                  
+                  if ((topConfidence as number) >= 0.8) {
+                    statusColor = isHealthy ? Green : "#FF8C00";
+                    statusIcon = isHealthy ? "checkmark-circle" : "warning";
+                    statusText = isHealthy ? "Healthy Plant" : "Disease Detected";
+                  } else if ((topConfidence as number) >= 0.5) {
+                    statusColor = "#FF8C00";
+                    statusIcon = "help-circle";
+                    statusText = "Uncertain";
+                  }
 
-                    return (
-                      <View style={styles.topPredictionCard}>
-                        <View style={styles.topPredictionHeader}>
-                          <View style={[styles.statusIconContainer, { backgroundColor: statusColor }]}>
-                            <Ionicons name={statusIcon as any} size={28} color="#fff" />
-                          </View>
-                          <View style={styles.topPredictionInfo}>
-                            <Text style={styles.statusText}>{statusText}</Text>
-                            <Text style={styles.topPredictionName}>{cleanTopPlant}</Text>
-                            <View style={styles.confidenceContainer}>
-                              <Text style={styles.confidenceText}>Confidence: </Text>
-                              <Text style={[styles.confidenceValue, { color: statusColor }]}>
-                                {confidencePercent}%
-                              </Text>
-                            </View>
+                  return (
+                    <View style={styles.topPredictionCard}>
+                      <View style={styles.topPredictionHeader}>
+                        <View style={[styles.statusIconContainer, { backgroundColor: statusColor }]}>
+                          <Ionicons name={statusIcon as any} size={28} color="#fff" />
+                        </View>
+                        <View style={styles.topPredictionInfo}>
+                          <Text style={styles.statusText}>{statusText}</Text>
+                          <Text style={styles.topPredictionName}>{cleanTopPlant}</Text>
+                          <View style={styles.confidenceContainer}>
+                            <Text style={styles.confidenceText}>Confidence: </Text>
+                            <Text style={[styles.confidenceValue, { color: statusColor }]}>
+                              {confidencePercent}%
+                            </Text>
                           </View>
                         </View>
-                        <View style={styles.topPredictionBar}>
-                          <View style={[styles.topPredictionProgress, { 
-                            width: `${Math.max(5, parseFloat(confidencePercent))}%`,
-                            backgroundColor: statusColor 
-                          }]} />
-                        </View>
                       </View>
-                    );
-                  })()}
+                      <View style={styles.topPredictionBar}>
+                        <View style={[styles.topPredictionProgress, { 
+                          width: `${Math.max(5, parseFloat(confidencePercent))}%`,
+                          backgroundColor: statusColor 
+                        }]} />
+                      </View>
+                    </View>
+                  );
+                })()}
 
-                  {/* Additional Predictions */}
-                  <View style={styles.additionalPredictions}>
-                    <Text style={styles.additionalPredictionsTitle}>Other Possibilities</Text>
-                    {Object.entries(result.predictions)
-                      .sort(([,a], [,b]) => (b as number) - (a as number))
-                      .slice(1, 4) // Show next 3 predictions
-                      .map(([plant, confidence], index) => {
-                        const confidencePercent = ((confidence as number) * 100).toFixed(1);
-                        const cleanPlantName = plant.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                        
-                        return (
-                          <View key={plant} style={styles.additionalPredictionItem}>
-                            <View style={styles.additionalPredictionContent}>
-                              <Text style={styles.additionalPlantName}>{cleanPlantName}</Text>
-                              <Text style={styles.additionalConfidence}>{confidencePercent}%</Text>
-                            </View>
-                            <View style={styles.additionalPredictionBar}>
-                              <View style={[styles.additionalProgress, { 
-                                width: `${Math.max(2, parseFloat(confidencePercent))}%`
-                              }]} />
-                            </View>
+                {/* Additional Predictions */}
+                <View style={styles.additionalPredictions}>
+                  <Text style={styles.additionalPredictionsTitle}>Other Possibilities</Text>
+                  {Object.entries(result.predictions)
+                    .sort(([,a], [,b]) => (b as number) - (a as number))
+                    .slice(1, 4) // Show next 3 predictions
+                    .map(([plant, confidence], index) => {
+                      const confidencePercent = ((confidence as number) * 100).toFixed(1);
+                      const cleanPlantName = plant.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                      
+                      return (
+                        <View key={plant} style={styles.additionalPredictionItem}>
+                          <View style={styles.additionalPredictionContent}>
+                            <Text style={styles.additionalPlantName}>{cleanPlantName}</Text>
+                            <Text style={styles.additionalConfidence}>{confidencePercent}%</Text>
                           </View>
-                        );
-                      })}
-                  </View>
+                          <View style={styles.additionalPredictionBar}>
+                            <View style={[styles.additionalProgress, { 
+                              width: `${Math.max(2, parseFloat(confidencePercent))}%`
+                            }]} />
+                          </View>
+                        </View>
+                      );
+                    })}
                 </View>
-                <View style={styles.recommendationsSection}>
-                  <Text style={styles.recommendationsTitle}>Recommended Actions</Text>
-                  {(() => {
-                    const topPrediction = Object.entries(result.predictions)
-                      .sort(([,a], [,b]) => (b as number) - (a as number))[0];
-                    const [topPlant] = topPrediction;
-                    const isHealthy = topPlant.toLowerCase().includes('healthy');
-                    
-                    return (
-                      <View style={styles.recommendationsList}>
-                        {isHealthy ? (
-                          <>
-                            <View style={styles.recommendationItem}>
-                              <Ionicons name="checkmark-circle" size={20} color={Green} />
-                              <Text style={styles.recommendationText}>Continue current care routine</Text>
-                            </View>
-                            <View style={styles.recommendationItem}>
-                              <Ionicons name="eye" size={20} color={Green} />
-                              <Text style={styles.recommendationText}>Monitor for any changes</Text>
-                            </View>
-                          </>
-                        ) : (
-                          <>
-                            <View style={styles.recommendationItem}>
-                              <Ionicons name="information-circle" size={20} color="#FF8C00" />
-                              <Text style={styles.recommendationText}>Learn more about this condition</Text>
-                            </View>
-                            <View style={styles.recommendationItem}>
-                              <Ionicons name="people" size={20} color="#FF8C00" />
-                              <Text style={styles.recommendationText}>Consult with plant experts</Text>
-                            </View>
-                            <View style={styles.recommendationItem}>
-                              <Ionicons name="camera" size={20} color="#FF8C00" />
-                              <Text style={styles.recommendationText}>Take more photos if needed</Text>
-                            </View>
-                          </>
-                        )}
-                      </View>
-                    );
-                  })()}
-                </View>
-                </ScrollView>
+              </View>
+              <View style={styles.recommendationsSection}>
+                <Text style={styles.recommendationsTitle}>Recommended Actions</Text>
+                {(() => {
+                  const topPrediction = Object.entries(result.predictions)
+                    .sort(([,a], [,b]) => (b as number) - (a as number))[0];
+                  const [topPlant] = topPrediction;
+                  const isHealthy = topPlant.toLowerCase().includes('healthy');
+                  
+                  return (
+                    <View style={styles.recommendationsList}>
+                      {isHealthy ? (
+                        <>
+                          <View style={styles.recommendationItem}>
+                            <Ionicons name="checkmark-circle" size={20} color={Green} />
+                            <Text style={styles.recommendationText}>Continue current care routine</Text>
+                          </View>
+                          <View style={styles.recommendationItem}>
+                            <Ionicons name="eye" size={20} color={Green} />
+                            <Text style={styles.recommendationText}>Monitor for any changes</Text>
+                          </View>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.recommendationItem}>
+                            <Ionicons name="information-circle" size={20} color="#FF8C00" />
+                            <Text style={styles.recommendationText}>Learn more about this condition</Text>
+                          </View>
+                          <View style={styles.recommendationItem}>
+                            <Ionicons name="people" size={20} color="#FF8C00" />
+                            <Text style={styles.recommendationText}>Consult with plant experts</Text>
+                          </View>
+                          <View style={styles.recommendationItem}>
+                            <Ionicons name="camera" size={20} color="#FF8C00" />
+                            <Text style={styles.recommendationText}>Take more photos if needed</Text>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  );
+                })()}
+              </View>
+              </ScrollView>
             ) : result?.success ? (
               <View style={styles.modernSuccessContainer}>
                 <View style={styles.successIconContainer}>
