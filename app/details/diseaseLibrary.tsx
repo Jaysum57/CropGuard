@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   FlatList,
   Image,
@@ -10,8 +11,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  ActivityIndicator
+  View
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { categories } from "../../components/DiseaseData";
@@ -82,14 +82,13 @@ const AllDiseases = () => {
     }
   };
 
-  // ... (rest of the component logic remains the same)
-
+  // Filter and sort diseases based on search and category in alphabetical order
   const filteredDiseases = diseases.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase()) ||
                           item.description.toLowerCase().includes(search.toLowerCase());
     const matchesCategory = selectedCategory === "All" || item.category.toLowerCase().includes(selectedCategory.toLowerCase());
     return matchesSearch && matchesCategory;
-  });
+  }).sort((a, b) => a.name.localeCompare(b.name));
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
