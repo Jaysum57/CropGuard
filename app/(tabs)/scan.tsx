@@ -66,6 +66,23 @@ function ScanScreen() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Listen for profile updates (tier changes from account screen)
+  useEffect(() => {
+    const handleProfileUpdated = () => {
+      console.log('Scan: Profile updated event received, refreshing tier and scan count...');
+      if (session?.user) {
+        // Force refresh to get latest tier from database
+        loadUserTierAndScanCount(session.user.id, true);
+      }
+    };
+
+    eventEmitter.on(EVENTS.PROFILE_UPDATED, handleProfileUpdated);
+
+    return () => {
+      eventEmitter.off(EVENTS.PROFILE_UPDATED, handleProfileUpdated);
+    };
+  }, [session]);
+
   /**
    * Load user tier from cache or database and get scan count
    */
@@ -1221,13 +1238,49 @@ function ScanScreen() {
               <View style={styles.upgradeButtonContainer}>
                 <TouchableOpacity
                   style={styles.upgradePremiumButton}
-                  onPress={() => {
-                    // TODO: Implement upgrade flow (e.g., navigate to payment screen)
-                    Alert.alert(
-                      "Coming Soon",
-                      "Premium upgrade functionality will be available soon!",
-                      [{ text: "OK" }]
-                    );
+                  onPress={async () => {
+                    if (!session?.user) {
+                      Alert.alert("Error", "Please sign in to upgrade your account.");
+                      return;
+                    }
+
+                    try {
+                      // Update user tier to premium in database
+                      const { error } = await supabase
+                        .from("profiles")
+                        .update({ tier: "premium" })
+                        .eq("id", session.user.id);
+
+                      if (error) {
+                        Alert.alert("Error", "Failed to upgrade account. Please try again.");
+                        console.error("Upgrade error:", error);
+                        return;
+                      }
+
+                      // Invalidate entire user cache (profile and stats)
+                      profileCache.invalidateUser(session.user.id);
+                      
+                      // Update local state
+                      setUserTier("premium");
+                      
+                      // Force refresh tier and scan count from database to recache
+                      await loadUserTierAndScanCount(session.user.id, true);
+
+                      // Close modal
+                      setUpgradeModalVisible(false);
+
+                      // Show success message
+                      Alert.alert(
+                        "Success! 🎉",
+                        "Your account has been upgraded to Premium. Enjoy unlimited scans!",
+                        [{ text: "Awesome!" }]
+                      );
+                      
+                      console.log("✅ User upgraded to premium and cache refreshed");
+                    } catch (error) {
+                      console.error("Exception during upgrade:", error);
+                      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+                    }
                   }}
                 >
                   <Ionicons name="star" size={20} color="#fff" />

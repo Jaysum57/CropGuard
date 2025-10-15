@@ -24,7 +24,7 @@ interface Profile {
     username: string | null;
     website: string | null;
     avatar_url: string | null;
-    tier: string | null;
+    tier: 'free' | 'premium' | null;
 }
 
 interface UserStats {
@@ -367,12 +367,23 @@ export default function Account() {
                             Alert.alert("Error", "Failed to update account tier. Try again.");
                             console.error(error);
                         } else {
-                        Alert.alert("Success", "You're account has been " + actionText + ".");
-                        // Update local state immediately (no wait)
-                        setProfile((prev) => prev ? { ...prev, tier: newTier } : prev);                       
-                        profileCache.invalidateProfile(session.user.id);
-                        await getProfile(true); // refresh
+                        // Invalidate entire user cache (profile and stats)
+                        profileCache.invalidateUser(session.user.id);
+                        
+                        // Update local state immediately
+                        setProfile((prev) => prev ? { ...prev, tier: newTier } : prev);
+                        
+                        // Force refresh profile and stats from database
+                        await getProfile(true);
+                        await fetchUserStats(true);
+                        
+                        // Emit event to notify other screens (like scan.tsx) about tier change
+                        eventEmitter.emit(EVENTS.PROFILE_UPDATED);
+                        
                         setShowUpgradeModal(false);
+                        
+                        Alert.alert("Success", "Your account has been " + actionText + ".");
+                        logger.success(`Account tier ${actionText} to ${newTier}`);
                         }
                     }}
                     >

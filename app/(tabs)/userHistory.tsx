@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { eventEmitter, EVENTS } from "../../lib/eventEmitter";
+import { profileCache } from "../../lib/profileCache";
 import { supabase } from "../../lib/supabase";
 
 const screenWidth = Dimensions.get("window").width;
@@ -43,6 +44,42 @@ function UserHistoryScreen() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<ScanHistory | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [userTier, setUserTier] = useState<'free' | 'premium'>('free');
+  const FREE_TIER_LIMIT = 5;
+
+  const loadUserTier = async (userId: string) => {
+    try {
+      // Try to get tier from cache first
+      let tier = profileCache.getUserTier(userId);
+
+      // If not in cache, fetch from database
+      if (!tier) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('tier')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('Error fetching user tier:', error);
+          tier = 'free'; // Default to free on error
+        } else {
+          tier = (profile?.tier as 'free' | 'premium') || 'free';
+          
+          // Update cache
+          const cachedProfile = profileCache.getProfile(userId);
+          if (cachedProfile) {
+            profileCache.setProfile(userId, { ...cachedProfile, tier });
+          }
+        }
+      }
+
+      setUserTier(tier);
+    } catch (error) {
+      console.error('Error loading user tier:', error);
+      setUserTier('free');
+    }
+  };
 
   const fetchScanHistory = async (isRefreshing = false) => {
     try {
@@ -59,6 +96,9 @@ function UserHistoryScreen() {
         Alert.alert("Error", "Please sign in to view your scan history.");
         return;
       }
+
+      // Load user tier
+      await loadUserTier(user.id);
 
       const { data, error } = await supabase
         .from("scan_activity")
@@ -121,6 +161,19 @@ function UserHistoryScreen() {
   };
 
   const confirmDelete = (item: ScanHistory) => {
+    // Check if user is free tier and at/above limit
+    if (userTier === 'free' && historyData.length >= FREE_TIER_LIMIT) {
+      Alert.alert(
+        "Delete Restricted",
+        `Free tier users cannot delete scans when at the ${FREE_TIER_LIMIT}-scan limit. Upgrade to Premium for unlimited scans and full history management.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Upgrade", onPress: () => router.push("/(tabs)/account") }
+        ]
+      );
+      return;
+    }
+
     setItemToDelete(item);
     setDeleteModalVisible(true);
   };
@@ -142,6 +195,23 @@ function UserHistoryScreen() {
 
     return () => {
       eventEmitter.off(EVENTS.SCAN_COMPLETED, handleScanCompleted);
+    };
+  }, []);
+
+  // Listen for profile updates (tier changes)
+  useEffect(() => {
+    const handleProfileUpdated = async () => {
+      // Reload tier when profile is updated in account.tsx
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await loadUserTier(user.id);
+      }
+    };
+
+    eventEmitter.on(EVENTS.PROFILE_UPDATED, handleProfileUpdated);
+
+    return () => {
+      eventEmitter.off(EVENTS.PROFILE_UPDATED, handleProfileUpdated);
     };
   }, []);
 
@@ -236,13 +306,20 @@ function UserHistoryScreen() {
         </View>
 
         <TouchableOpacity
-          style={styles.deleteButton}
+          style={[
+            styles.deleteButton,
+            userTier === 'free' && historyData.length >= FREE_TIER_LIMIT && styles.deleteButtonRestricted
+          ]}
           onPress={(e) => {
             e.stopPropagation();
             confirmDelete(item);
           }}
         >
-          <Ionicons name="trash-outline" size={20} color="#FF4444" />
+          {userTier === 'free' && historyData.length >= FREE_TIER_LIMIT ? (
+            <Ionicons name="lock-closed" size={20} color="#999" />
+          ) : (
+            <Ionicons name="trash-outline" size={20} color="#FF4444" />
+          )}
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -434,11 +511,23 @@ function UserHistoryScreen() {
                   {/* Action Buttons */}
                   <View style={styles.modalButtonContainer}>
                     <TouchableOpacity
-                      style={styles.deleteModalButton}
+                      style={[
+                        styles.deleteModalButton,
+                        userTier === 'free' && historyData.length >= FREE_TIER_LIMIT && styles.deleteModalButtonRestricted
+                      ]}
                       onPress={() => confirmDelete(selectedItem)}
                     >
-                      <Ionicons name="trash-outline" size={20} color="#fff" />
-                      <Text style={styles.deleteModalButtonText}>Delete</Text>
+                      {userTier === 'free' && historyData.length >= FREE_TIER_LIMIT ? (
+                        <>
+                          <Ionicons name="lock-closed" size={20} color="#999" />
+                          <Text style={styles.deleteModalButtonTextRestricted}>Restricted</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Ionicons name="trash-outline" size={20} color="#fff" />
+                          <Text style={styles.deleteModalButtonText}>Delete</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -646,6 +735,9 @@ const styles = StyleSheet.create({
     padding: 8,
     marginLeft: 8,
   },
+  deleteButtonRestricted: {
+    opacity: 0.5,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -840,8 +932,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 8,
   },
+  deleteModalButtonRestricted: {
+    backgroundColor: "#E0E0E0",
+    opacity: 0.7,
+  },
   deleteModalButtonText: {
     color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  deleteModalButtonTextRestricted: {
+    color: "#999",
     fontSize: 16,
     fontWeight: "bold",
   },
