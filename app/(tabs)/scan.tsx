@@ -305,22 +305,22 @@ function ScanScreen() {
           console.log('💾 [LOGGING] Raw prediction:', topPrediction);
           console.log('💾 [LOGGING] Mapped disease ID:', mappedDiseaseId);
           
-          // Only log if we have a valid disease (not healthy/null)
-          if (mappedDiseaseId) {
-            // Format the disease ID (remove underscores, capitalize words)
-            const formattedDiseaseName = formatDiseaseId(mappedDiseaseId);
-            console.log('💾 [LOGGING] Formatted disease name:', formattedDiseaseName);
-            
-            // A. Upload the optimized image to Cloudinary
-            const cloudinaryUrl = await uploadToCloudinary(assetUri);
-            
-            if (cloudinaryUrl) {
-              // B. Log the successful scan with both raw ID and formatted name
-              const accuracyScore = topPredictionEntry[1] as number;
-              await logScanActivity(mappedDiseaseId, formattedDiseaseName, cloudinaryUrl, accuracyScore);
-            }
-          } else {
-            console.log('💾 [LOGGING] Skipping log - healthy plant or unmapped disease');
+          // Use "healthy" as disease_id for healthy plants (when mappedDiseaseId is null)
+          const diseaseIdToLog = mappedDiseaseId || "healthy";
+          const formattedDiseaseName = mappedDiseaseId 
+            ? formatDiseaseId(mappedDiseaseId) 
+            : "Healthy";
+          
+          console.log('💾 [LOGGING] Disease ID to log:', diseaseIdToLog);
+          console.log('💾 [LOGGING] Formatted disease name:', formattedDiseaseName);
+          
+          // A. Upload the optimized image to Cloudinary
+          const cloudinaryUrl = await uploadToCloudinary(assetUri);
+          
+          if (cloudinaryUrl) {
+            // B. Log the successful scan with both raw ID and formatted name
+            const accuracyScore = topPredictionEntry[1] as number;
+            await logScanActivity(diseaseIdToLog, formattedDiseaseName, cloudinaryUrl, accuracyScore);
           }
         }
         
@@ -399,22 +399,22 @@ function ScanScreen() {
           console.log('💾 [LOGGING] Raw prediction:', topPrediction);
           console.log('💾 [LOGGING] Mapped disease ID:', mappedDiseaseId);
           
-          // Only log if we have a valid disease (not healthy/null)
-          if (mappedDiseaseId) {
-            // Format the disease ID (remove underscores, capitalize words)
-            const formattedDiseaseName = formatDiseaseId(mappedDiseaseId);
-            console.log('💾 [LOGGING] Formatted disease name:', formattedDiseaseName);
-            
-            // A. Upload the optimized image to Cloudinary
-            const cloudinaryUrl = await uploadToCloudinary(photoUriFromCamera);
-            
-            if (cloudinaryUrl) {
-              // B. Log the successful scan with both raw ID and formatted name
-              const accuracyScore = topPredictionEntry[1] as number;
-              await logScanActivity(mappedDiseaseId, formattedDiseaseName, cloudinaryUrl, accuracyScore);
-            }
-          } else {
-            console.log('💾 [LOGGING] Skipping log - healthy plant or unmapped disease');
+          // Use "healthy" as disease_id for healthy plants (when mappedDiseaseId is null)
+          const diseaseIdToLog = mappedDiseaseId || "healthy";
+          const formattedDiseaseName = mappedDiseaseId 
+            ? formatDiseaseId(mappedDiseaseId) 
+            : "Healthy";
+          
+          console.log('💾 [LOGGING] Disease ID to log:', diseaseIdToLog);
+          console.log('💾 [LOGGING] Formatted disease name:', formattedDiseaseName);
+          
+          // A. Upload the optimized image to Cloudinary
+          const cloudinaryUrl = await uploadToCloudinary(photoUriFromCamera);
+          
+          if (cloudinaryUrl) {
+            // B. Log the successful scan with both raw ID and formatted name
+            const accuracyScore = topPredictionEntry[1] as number;
+            await logScanActivity(diseaseIdToLog, formattedDiseaseName, cloudinaryUrl, accuracyScore);
           }
         }
 

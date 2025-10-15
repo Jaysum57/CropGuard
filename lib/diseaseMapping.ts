@@ -111,6 +111,12 @@ export const DISEASE_MAPPING: DiseaseMapping = {
 export function extractDiseaseName(predictionName: string): string {
   console.log('🔍 [MAPPING] Input prediction:', predictionName);
   
+  // Quick check: if prediction contains "healthy" (case-insensitive), return "healthy"
+  if (predictionName.toLowerCase().includes('healthy')) {
+    console.log('🔍 [MAPPING] Detected "healthy" in prediction, returning "healthy"');
+    return 'healthy';
+  }
+  
   // Try splitting by '___' (three underscores) first - this is the expected format
   let parts = predictionName.split('___');
   
@@ -121,6 +127,14 @@ export function extractDiseaseName(predictionName: string): string {
       parts = predictionName.split(' - ');
       console.log('🔍 [MAPPING] Used hyphen separator extraction');
     }
+    // Check if it matches pattern like "Corn(maize)DiseaseName" - parenthesis without space
+    else if (predictionName.match(/^[^)]+\)(.+)$/)) {
+      const match = predictionName.match(/^[^)]+\)(.+)$/);
+      if (match && match[1]) {
+        parts = ['plant', match[1].trim()]; // Trim to remove leading/trailing spaces
+        console.log('🔍 [MAPPING] Used parenthesis (no space) extraction pattern');
+      }
+    }
     // Check if it matches pattern like "Corn(Maize) Disease Name" or "Plant Disease Name"
     else {
       // Look for closing parenthesis followed by space, or just plant name followed by space
@@ -128,14 +142,15 @@ export function extractDiseaseName(predictionName: string): string {
                     predictionName.match(/^[A-Z][a-z]+\s+(.+)$/); // Pattern: PlantName DiseaseName
       
       if (match && match[1]) {
-        parts = ['plant', match[1]]; // Create parts array with extracted disease
+        parts = ['plant', match[1].trim()]; // Trim to remove leading/trailing spaces
         console.log('🔍 [MAPPING] Used alternative extraction pattern');
       }
     }
   }
   
   // Return the disease part (second part), or the whole string if no separator found
-  const extracted = parts.length > 1 ? parts[1] : predictionName;
+  // Always trim the result to handle any leading/trailing spaces
+  const extracted = (parts.length > 1 ? parts[1] : predictionName).trim();
   
   console.log('🔍 [MAPPING] Extracted disease name:', extracted);
   
