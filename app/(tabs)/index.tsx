@@ -30,7 +30,11 @@ const DarkGreen = "#021A1A";
 // Define the structure for the profile data we will fetch
 interface Profile {
   first_name: string | null;
+  last_name: string | null;
   username: string | null;
+  website: string | null;
+  avatar_url: string | null;
+  tier: string | null; // Add this property
 }
 
 // Define the structure for fetched statistics of disease data
@@ -225,7 +229,11 @@ export default function Index() {
               // Map the cached profile to our simplified Profile interface
               setProfile({
                   first_name: cachedProfile.first_name,
+                  last_name: cachedProfile.last_name,
                   username: cachedProfile.username,
+                  website: cachedProfile.website,
+                  avatar_url: cachedProfile.avatar_url,
+                  tier: cachedProfile.tier as "free" | "premium" | null,
               });
               setLoadingProfile(false);
               return;
@@ -258,6 +266,7 @@ export default function Index() {
                   username: profileData.username,
                   website: null, // Not fetched in index
                   avatar_url: null, // Not fetched in index
+                  tier: profileData.tier as "free" | "premium" | null,
               });
           } else {
               setProfile(null);
