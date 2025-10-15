@@ -38,6 +38,24 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
           const label = options.title;
           const isFocused = state.index === index;
 
+          if ((options as any).href === null) {
+            return null;
+          }
+
+          // Skip hidden routes
+          if (
+            [
+              '_sitemap',
+              '+not-found',
+              'information',
+              'splashscreen',
+              'usermanual',
+              'editProfile',
+            ].includes(route.name) || route.name.startsWith('details')
+          ) {
+            return null;
+          }
+
           const onPress = () => {
             const event = navigation.emit({
               type: 'tabPress',
@@ -71,19 +89,6 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
             iconName = 'person-outline';
             activeIconName = 'person';
             displayLabel = 'Profile';
-          }
-
-          // Skip hidden routes
-          if (
-            [
-              '_sitemap',
-              '+not-found',
-              'information',
-              'splashscreen',
-              'usermanual',
-            ].includes(route.name) || route.name.startsWith('details')
-          ) {
-            return null;
           }
 
           return (
@@ -193,6 +198,14 @@ export default function TabsLayout() {
               name="account" 
               options={{ title: 'Account' }}
               // component prop removed to resolve TypeScript error
+          />
+
+          <Tabs.Screen
+            name="editProfile"
+            options={{
+              title: 'Edit Profile',
+              href: null // Hide from tab bar
+            }}
           />
 
         </Tabs>

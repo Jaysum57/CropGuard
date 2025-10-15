@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,8 +26,8 @@ const OffWhite = "#F6F6F6";
 interface ScanHistory {
   id: string;
   disease_id: string;
-  disease_name: string;      // Formatted disease name (e.g., "Early Blight")
-  bucket_file_path: string; // Cloudinary URL
+  disease_name: string;
+  bucket_file_path: string;
   accuracy_score: number;
   scanned_at: string;
   user_id: string;
@@ -40,9 +40,10 @@ function UserHistoryScreen() {
   const [historyData, setHistoryData] = useState<ScanHistory[]>([]);
   const [selectedItem, setSelectedItem] = useState<ScanHistory | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [shouldRefresh, setShouldRefresh] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<ScanHistory | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  // Fetch scan history from Supabase
   const fetchScanHistory = async (isRefreshing = false) => {
     try {
       if (isRefreshing) {
@@ -51,7 +52,6 @@ function UserHistoryScreen() {
         setLoading(true);
       }
 
-      // Get the current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
@@ -60,7 +60,6 @@ function UserHistoryScreen() {
         return;
       }
 
-      // Fetch scan history for the current user
       const { data, error } = await supabase
         .from("scan_activity")
         .select("*")
@@ -74,7 +73,6 @@ function UserHistoryScreen() {
       }
 
       setHistoryData(data || []);
-      setShouldRefresh(false);
     } catch (error) {
       console.error("Exception while fetching history:", error);
       Alert.alert("Error", "An unexpected error occurred.");
@@ -84,13 +82,60 @@ function UserHistoryScreen() {
     }
   };
 
-  useEffect(() => {
-    // Initial fetch
-    fetchScanHistory();
+  const handleDelete = async () => {
+    if (!itemToDelete) return;
 
-    // Listen for new scan events
+    try {
+      setDeleting(true);
+
+      const { error } = await supabase
+        .from("scan_activity")
+        .delete()
+        .eq("id", itemToDelete.id);
+
+      if (error) {
+        console.error("Error deleting scan:", error);
+        Alert.alert("Error", "Failed to delete scan. Please try again.");
+        return;
+      }
+
+      // Remove from local state
+      setHistoryData(prev => prev.filter(item => item.id !== itemToDelete.id));
+      
+      // Close modals
+      setDeleteModalVisible(false);
+      setModalVisible(false);
+      setItemToDelete(null);
+      setSelectedItem(null);
+
+      // **CRITICAL: Emit event to notify other screens**
+      eventEmitter.emit(EVENTS.SCAN_COMPLETED);
+
+      Alert.alert("Success", "Scan deleted successfully");
+    } catch (error) {
+      console.error("Exception while deleting:", error);
+      Alert.alert("Error", "An unexpected error occurred.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const confirmDelete = (item: ScanHistory) => {
+    setItemToDelete(item);
+    setDeleteModalVisible(true);
+  };
+
+  // Refresh data when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchScanHistory(true);
+    }, [])
+  );
+
+  // Listen for scan completion events
+  useEffect(() => {
     const handleScanCompleted = () => {
-      setShouldRefresh(true);
+      fetchScanHistory(true);
     };
 
     eventEmitter.on(EVENTS.SCAN_COMPLETED, handleScanCompleted);
@@ -99,13 +144,6 @@ function UserHistoryScreen() {
       eventEmitter.off(EVENTS.SCAN_COMPLETED, handleScanCompleted);
     };
   }, []);
-
-  // Refresh when shouldRefresh flag is set
-  useEffect(() => {
-    if (shouldRefresh) {
-      fetchScanHistory(true);
-    }
-  }, [shouldRefresh]);
 
   const handleItemPress = (item: ScanHistory) => {
     setSelectedItem(item);
@@ -125,7 +163,7 @@ function UserHistoryScreen() {
   };
 
   const renderHistoryItem = ({ item }: { item: ScanHistory }) => {
-    const diseaseName = item.disease_name; // Use the formatted disease_name from database
+    const diseaseName = item.disease_name;
     const accuracyPercent = (item.accuracy_score * 100).toFixed(1);
     const isHealthy = item.disease_name.toLowerCase().includes("healthy");
 
@@ -170,7 +208,15 @@ function UserHistoryScreen() {
           </View>
         </View>
 
-        <Ionicons name="chevron-forward" size={20} color="#ccc" />
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            confirmDelete(item);
+          }}
+        >
+          <Ionicons name="trash-outline" size={20} color="#FF4444" />
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
@@ -198,7 +244,6 @@ function UserHistoryScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Green} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -225,7 +270,6 @@ function UserHistoryScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* History List */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Green} />
@@ -255,7 +299,6 @@ function UserHistoryScreen() {
           <View style={styles.modalContainer}>
             {selectedItem && (
               <>
-                {/* Close Button */}
                 <TouchableOpacity
                   style={styles.closeButton}
                   onPress={() => setModalVisible(false)}
@@ -263,7 +306,6 @@ function UserHistoryScreen() {
                   <Ionicons name="close" size={28} color="#fff" />
                 </TouchableOpacity>
 
-                {/* Image */}
                 <View style={styles.modalImageContainer}>
                   <Image
                     source={{ uri: selectedItem.bucket_file_path }}
@@ -272,7 +314,6 @@ function UserHistoryScreen() {
                   />
                 </View>
 
-                {/* Details */}
                 <View style={styles.modalDetails}>
                   <View style={styles.modalHeader}>
                     <Ionicons
@@ -315,22 +356,86 @@ function UserHistoryScreen() {
                     </View>
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.doneButton}
-                    onPress={() => setModalVisible(false)}
-                  >
-                    <Text style={styles.doneButtonText}>Done</Text>
-                  </TouchableOpacity>
+                  <View style={styles.modalButtonContainer}>
+                    <TouchableOpacity
+                      style={styles.deleteModalButton}
+                      onPress={() => confirmDelete(selectedItem)}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#fff" />
+                      <Text style={styles.deleteModalButtonText}>Delete</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.doneButton}
+                      onPress={() => setModalVisible(false)}
+                    >
+                      <Text style={styles.doneButtonText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </>
             )}
           </View>
         </View>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setDeleteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteConfirmContainer}>
+            <View style={styles.deleteIconContainer}>
+              <Ionicons name="trash" size={48} color="#FF4444" />
+            </View>
+
+            <Text style={styles.deleteTitle}>Delete Scan?</Text>
+            <Text style={styles.deleteMessage}>
+              Are you sure you want to delete this scan? This action cannot be undone.
+            </Text>
+
+            {itemToDelete && (
+              <View style={styles.deletePreview}>
+                <Image
+                  source={{ uri: itemToDelete.bucket_file_path }}
+                  style={styles.deletePreviewImage}
+                  resizeMode="cover"
+                />
+                <Text style={styles.deletePreviewText} numberOfLines={2}>
+                  {itemToDelete.disease_name}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.deleteButtonContainer}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setDeleteModalVisible(false)}
+                disabled={deleting}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.confirmDeleteButton, deleting && styles.disabledButton]}
+                onPress={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.confirmDeleteButtonText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       
-      {/* Bottom Spacing */}
       <View style={styles.bottomSpacing} />
-    
     </SafeAreaView>
   );
 }
@@ -461,6 +566,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#999",
   },
+  deleteButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -504,7 +613,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",
@@ -585,7 +693,27 @@ const styles = StyleSheet.create({
     color: DarkGreen,
     textAlign: "center",
   },
+  modalButtonContainer: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  deleteModalButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FF4444",
+    paddingVertical: 16,
+    borderRadius: 20,
+    gap: 8,
+  },
+  deleteModalButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
   doneButton: {
+    flex: 1,
     backgroundColor: Green,
     paddingVertical: 16,
     borderRadius: 20,
@@ -596,8 +724,90 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
+  deleteConfirmContainer: {
+    width: screenWidth * 0.85,
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+  },
+  deleteIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#FFE8E8",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  deleteTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: DarkGreen,
+    marginBottom: 8,
+  },
+  deleteMessage: {
+    fontSize: 15,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  deletePreview: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: OffWhite,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  deletePreviewImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: "#f0f0f0",
+  },
+  deletePreviewText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: DarkGreen,
+  },
+  deleteButtonContainer: {
+    flexDirection: "row",
+    width: "100%",
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: OffWhite,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#666",
+  },
+  confirmDeleteButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: "#FF4444",
+    alignItems: "center",
+  },
+  confirmDeleteButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
   bottomSpacing: { 
     height: 70
   },
-
 });

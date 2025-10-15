@@ -1,17 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from 'expo-router'; // 1. Import useRouter
-import React, { useContext, useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import { Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supabase } from '../../lib/supabase';
 
-// Import SessionContext from the layout file
 import { eventEmitter, EVENTS } from '../../lib/eventEmitter';
 import { logger } from '../../lib/logger';
 import { profileCache } from '../../lib/profileCache';
 import { SessionContext } from './_layout';
+import { Modal } from 'react-native';
 
-
-// Responsive sizing
 const { width } = Dimensions.get("window");
 
 const Green = "#30BE63";
@@ -20,32 +18,25 @@ const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 const LightGreen = "#E6F9EF";
 
-// Define the structure for the profile data we will fetch
 interface Profile {
     first_name: string | null;
     last_name: string | null;
     username: string | null;
     website: string | null;
     avatar_url: string | null;
+    tier: string | null;
 }
 
-// Define the structure for fetched statistics of disease data
 interface UserStats {
     plantsScanned: number;
     diseasesDetected: number;
     healthyScans: number;
-    accuracy: string; // e.g., "94%"
+    accuracy: string;
 }
 
-// Account component no longer needs the session prop, it uses Context
 export default function Account() {
-    
-    // Initialize the router for navigation
-    const router = useRouter(); // 2. Initialize the router
-    
-    // --- CONTEXT CONSUMPTION: Get session and loading state from context ---
+    const router = useRouter();
     const { session, isLoading: isSessionLoading } = useContext(SessionContext);
-    // --- END CONTEXT CONSUMPTION ---
 
     const [loadingProfile, setLoadingProfile] = useState(false);
     const [profile, setProfile] = useState<Profile | null>(null);
@@ -58,7 +49,6 @@ export default function Account() {
         accuracy: '0%' 
     });
     
-    // Convert join date for display
     const joinDate = session?.user.created_at 
         ? new Date(session.user.created_at).toLocaleDateString('en-US', { 
             year: 'numeric', 
@@ -77,89 +67,97 @@ export default function Account() {
         return profile?.username || 'New User';
     };
 
-async function fetchUserStats(forceRefresh = false) {
-    if (!session?.user) return;
-
-    // Check cache first (unless force refresh)
-    if (!forceRefresh) {
-        const cachedStats = profileCache.getStats(session.user.id);
-        if (cachedStats) {
-            setUserStats(cachedStats);
-            return;
+    const getTierInfo = () => {
+        const tier = profile?.tier?.toLowerCase() || 'free';
+        
+        if (tier === 'premium') {
+            return {
+                label: 'Premium',
+                color: '#FFD700',
+                bgColor: '#6142ebff', // light gold background(OG): #FFF9E6
+                icon: 'star' as const,
+            };
         }
-    }
-
-    try {
-        // 1. Get TOTAL SCANS: Count all entries for the user
-        const { count: totalCount, error: totalError } = await supabase
-            .from('scan_activity')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', session.user.id);
-            
-        if (totalError) throw totalError;
-
-        // 2. Get HEALTHY SCANS: Count entries where 'disease_id' ends with 'healthy'
-        const { count: healthyCount, error: healthyError } = await supabase
-            .from('scan_activity')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', session.user.id)
-            .ilike('disease_id', '%healthy'); // The '%' acts as a wildcard
-
-        if (healthyError) throw healthyError;
-
-        // 3. Get average accuracy score
-        const { data: accuracyData, error: accuracyError } = await supabase
-            .from('scan_activity')
-            .select('accuracy_score')
-            .eq('user_id', session.user.id);
-
-        if (accuracyError) throw accuracyError;
         
-        // Calculate average accuracy
-        const avgAccuracy = accuracyData?.length 
-            ? (accuracyData.reduce((sum, item) => sum + (item.accuracy_score || 0), 0) / accuracyData.length)
-            : 0;
-        
-        // 4. Calculate final stats
-        const plantsScanned = totalCount || 0;
-        const healthyScans = healthyCount || 0;
-        const diseasesDetected = plantsScanned - healthyScans;
-
-        const stats = {
-            plantsScanned,
-            healthyScans,
-            diseasesDetected,
-            accuracy: `${Math.round(avgAccuracy * 100)}%`
+        return {
+            label: 'Free',
+            color: '#666',
+            bgColor: '#F0F0F0',
+            icon: 'leaf' as const,
         };
+    };
 
-        setUserStats(stats);
-        
-        // Cache the stats
-        profileCache.setStats(session.user.id, stats);
-        
-    } catch (error) {
-        if (error instanceof Error) {
-            logger.error('Error fetching user stats:', error.message);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+    async function fetchUserStats(forceRefresh = false) {
+        if (!session?.user) return;
+
+        if (!forceRefresh) {
+            const cachedStats = profileCache.getStats(session.user.id);
+            if (cachedStats) {
+                setUserStats(cachedStats);
+                return;
+            }
+        }
+
+        try {
+            const { count: totalCount, error: totalError } = await supabase
+                .from('scan_activity')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', session.user.id);
+                
+            if (totalError) throw totalError;
+
+            const { count: healthyCount, error: healthyError } = await supabase
+                .from('scan_activity')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', session.user.id)
+                .ilike('disease_id', '%healthy');
+
+            if (healthyError) throw healthyError;
+
+            const { data: accuracyData, error: accuracyError } = await supabase
+                .from('scan_activity')
+                .select('accuracy_score')
+                .eq('user_id', session.user.id);
+
+            if (accuracyError) throw accuracyError;
+            
+            const avgAccuracy = accuracyData?.length 
+                ? (accuracyData.reduce((sum, item) => sum + (item.accuracy_score || 0), 0) / accuracyData.length)
+                : 0;
+            
+            const plantsScanned = totalCount || 0;
+            const healthyScans = healthyCount || 0;
+            const diseasesDetected = plantsScanned - healthyScans;
+
+            const stats = {
+                plantsScanned,
+                healthyScans,
+                diseasesDetected,
+                accuracy: `${Math.round(avgAccuracy * 100)}%`
+            };
+
+            setUserStats(stats);
+            profileCache.setStats(session.user.id, stats);
+            
+        } catch (error) {
+            if (error instanceof Error) {
+                logger.error('Error fetching user stats:', error.message);
+            }
         }
     }
-}
 
-
-    /**
-     * Fetches the user's profile data from the 'profiles' table.
-     * @param forceRefresh - If true, bypasses cache and fetches fresh data
-     */
     async function getProfile(forceRefresh = false) {
         if (!session?.user) {
             setLoadingProfile(false);
             return;
         }
 
-        // Check cache first (unless force refresh)
         if (!forceRefresh) {
             const cachedProfile = profileCache.getProfile(session.user.id);
             if (cachedProfile) {
-                setProfile(cachedProfile);
+                setProfile(cachedProfile as Profile);
                 setLoadingProfile(false);
                 return;
             }
@@ -170,19 +168,17 @@ async function fetchUserStats(forceRefresh = false) {
 
             const { data, error, status } = await supabase
                 .from('profiles')
-                .select(`first_name, last_name, username, website, avatar_url`) 
+                .select(`first_name, last_name, username, website, avatar_url, tier`) 
                 .eq('id', session.user.id)
                 .single();
 
             if (error && status !== 406) {
-                // Status 406 often means the profile hasn't been created yet.
                 throw error;
             }
 
             if (data) {
                 const profileData = data as Profile;
                 setProfile(profileData);
-                // Cache the profile data
                 profileCache.setProfile(session.user.id, profileData);
             } else {
                 setProfile(null);
@@ -196,7 +192,16 @@ async function fetchUserStats(forceRefresh = false) {
         }
     }
 
-    // Load profile data on component mount or when session changes
+    useFocusEffect(
+        useCallback(() => {
+            if (session?.user) {
+                logger.log('Account screen focused, refreshing data...');
+                getProfile(true);
+                fetchUserStats(true);
+            }
+        }, [session])
+    );
+
     useEffect(() => {
         logger.log("Account Component: Session Status (via Context) ->", session ? 'Active' : 'Null/Expired');
         
@@ -206,16 +211,14 @@ async function fetchUserStats(forceRefresh = false) {
         } else {
             setProfile(null);
             setLoadingProfile(false);
-            setUserStats({ plantsScanned: 0, healthyScans: 0, diseasesDetected: 0, accuracy: '0%' }); // Reset stats on logout
+            setUserStats({ plantsScanned: 0, healthyScans: 0, diseasesDetected: 0, accuracy: '0%' });
         }
     }, [session]);
 
-    // Listen for scan completion events and refresh stats
     useEffect(() => {
         const handleScanCompleted = () => {
             logger.log('Account: Scan completed event received, refreshing stats...');
             if (session?.user) {
-                // Invalidate stats cache and fetch fresh data
                 profileCache.invalidateStats(session.user.id);
                 fetchUserStats(true);
             }
@@ -228,12 +231,10 @@ async function fetchUserStats(forceRefresh = false) {
         };
     }, [session]);
 
-    // Listen for profile update events
     useEffect(() => {
         const handleProfileUpdated = () => {
             logger.log('Account: Profile updated event received, refreshing profile...');
             if (session?.user) {
-                // Invalidate profile cache and fetch fresh data
                 profileCache.invalidateProfile(session.user.id);
                 getProfile(true);
             }
@@ -246,10 +247,6 @@ async function fetchUserStats(forceRefresh = false) {
         };
     }, [session]);
 
-
-    /**
-     * Handle pull-to-refresh - fetches fresh data from database
-     */
     const onRefresh = async () => {
         if (!session?.user) return;
         
@@ -257,7 +254,6 @@ async function fetchUserStats(forceRefresh = false) {
         logger.custom('🔄', 'Refreshing profile and stats...');
         
         try {
-            // Fetch fresh data from database (bypassing cache)
             await Promise.all([
                 getProfile(true),
                 fetchUserStats(true)
@@ -284,13 +280,9 @@ async function fetchUserStats(forceRefresh = false) {
                             if (error) throw error;
                             logger.log("User successfully signed out");
                             
-                            // Clear profile cache on logout
                             if (session?.user) {
                                 profileCache.invalidateUser(session.user.id);
                             }
-                            
-                            // Navigation will be handled automatically by the auth state listener in _layout.tsx
-                            // No need for manual router.replace('/auth') here
 
                         } catch (error) {
                             logger.error("Logout Error:", error);
@@ -304,17 +296,13 @@ async function fetchUserStats(forceRefresh = false) {
     };
 
     const handleEditProfile = () => {
-        // TODO: Navigate to edit profile screen
-        // When profile is updated, emit PROFILE_UPDATED event:
-        // eventEmitter.emit(EVENTS.PROFILE_UPDATED);
-        Alert.alert("Feature", "Navigating to Edit Profile...");
+        router.push("/editProfile");
     };
 
     const handleSettings = () => {
         Alert.alert("Feature", "Navigating to Settings...");
     };
     
-    // 1. Show a basic loading indicator while profile data is being fetched, or if initial session check is running
     if (isSessionLoading || loadingProfile) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -323,10 +311,7 @@ async function fetchUserStats(forceRefresh = false) {
         );
     }
     
-    // 2. Since tabs layout now protects against unauthenticated access, 
-    // we can safely assume session exists at this point
     if (!session) {
-        // This should not happen due to tabs layout protection, but keeping as fallback
         return (
              <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
                 <Text style={{ color: DarkGreen, fontSize: 18, textAlign: 'center' }}>
@@ -336,35 +321,104 @@ async function fetchUserStats(forceRefresh = false) {
         );
     }
 
-    // Since we checked if session is null above, we can safely access session.user here.
+    const tierInfo = getTierInfo();
+
     return (
         <View style={styles.container}>
+            <Modal
+            transparent
+            animationType="fade"
+            visible={showUpgradeModal}
+            onRequestClose={() => setShowUpgradeModal(false)}
+            >
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContainer}>
+                <Text style={styles.modalTitle}>
+                    {profile?.tier === 'premium' ? 'Revert to Free?' : 'Upgrade to Premium?'}
+                </Text>
+                <Text style={styles.modalText}>
+                    {profile?.tier === 'premium'
+                        ? 'You will lose access to premium features.'
+                        : 'Unlock plant experts and exclusive plant health insights.'}
+                </Text>
+
+                <View style={styles.modalButtons}>
+                    <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => setShowUpgradeModal(false)}
+                    >
+                    <Text style={styles.cancelText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                    style={styles.confirmButton}
+                    onPress={async () => {
+                        if (!session?.user) return;
+
+                        const newTier = profile?.tier === 'premium' ? 'free' : 'premium';
+                        const actionText = newTier === 'premium' ? 'upgraded' : 'reverted';
+
+                        const { error } = await supabase
+                            .from("profiles")
+                            .update({ tier: newTier })
+                            .eq("id", session.user.id);
+
+                        if (error) {
+                            Alert.alert("Error", "Failed to update account tier. Try again.");
+                            console.error(error);
+                        } else {
+                        Alert.alert("Success", "You're account has been " + actionText + ".");
+                        // Update local state immediately (no wait)
+                        setProfile((prev) => prev ? { ...prev, tier: newTier } : prev);                       
+                        profileCache.invalidateProfile(session.user.id);
+                        await getProfile(true); // refresh
+                        setShowUpgradeModal(false);
+                        }
+                    }}
+                    >
+                    <Text style={styles.confirmText}>
+                        {profile?.tier === 'premium' ? 'Revert' : 'Upgrade'}
+                    </Text>
+                    </TouchableOpacity>
+                </View>
+                </View>
+            </View>
+            </Modal>
+
+
+
             <ScrollView 
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        colors={[Green]} // Android
-                        tintColor={Green} // iOS
-                        title="Pull to refresh" // iOS
-                        titleColor={DarkGreen} // iOS
+                        colors={[Green]}
+                        tintColor={Green}
+                        title="Pull to refresh"
+                        titleColor={DarkGreen}
                     />
                 }
             >
-                {/* Profile Header */}
                 <View style={styles.profileHeader}>
                     <View style={styles.profileIconContainer}>
-                        {/* Avatar Image Placeholder */}
                         <Ionicons name="person" size={40} color={Green} />
                     </View>
-                    {/* Display actual full name or username */}
-                    <Text style={styles.userName}>{getDisplayName()}</Text>
+                    
+                    <View style={styles.nameContainer}>
+                        <View style={[styles.tierBadge, { backgroundColor: tierInfo.bgColor }]}>
+                            <Ionicons name={tierInfo.icon} size={14} color={tierInfo.color} />
+                            <Text style={[styles.tierText, { color: tierInfo.color }]}>
+                                {tierInfo.label}
+                            </Text>
+                        </View>
+                            <Text style={styles.userName}>{getDisplayName()}</Text>
+                        </View>
+
                     <Text style={styles.userEmail}>{session.user.email}</Text>
                     <Text style={styles.joinDate}>Member since {joinDate}</Text>
                 </View>
 
-                {/* Statistics Cards (using dummy data for now) */}
                 <View style={styles.statsContainer}>
                     <Text style={styles.sectionTitle}>Your CropGuard Statistics</Text>
                     <View style={styles.statsRow}>
@@ -393,14 +447,13 @@ async function fetchUserStats(forceRefresh = false) {
                     </View>
                 </View>
 
-                {/* Account Information (Using fetched data) */}
                 <View style={styles.accountSection}>
                     <Text style={styles.sectionTitle}>Account Information</Text>
                     
-                    {/* Full Name */}
                     <View style={styles.infoCard}>
                         <Ionicons name="person-outline" size={24} color={Green} />
                         <View style={styles.infoContent}>
+                            <Text style={styles.infoLabel}>Full Name</Text>
                             <Text style={styles.infoValue}>{getDisplayName() || 'Not set'}</Text>
                         </View>
                         <TouchableOpacity onPress={handleEditProfile}>
@@ -408,18 +461,37 @@ async function fetchUserStats(forceRefresh = false) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Email */}
                     <View style={styles.infoCard}>
                         <Ionicons name="mail-outline" size={24} color={Green} />
                         <View style={styles.infoContent}>
                             <Text style={styles.infoLabel}>Email Address</Text>
                             <Text style={styles.infoValue}>{session.user.email}</Text>
                         </View>
-                        {/* No edit icon for email as it requires a separate flow */}
                         <View style={{ width: 20 }} /> 
                     </View>
 
-                    {/* Website (if applicable) */}
+                    <View style={styles.infoCard}>
+                        <Ionicons name={tierInfo.icon} size={24} color={tierInfo.color} />
+                        <View style={styles.infoContent}>
+                            <Text style={styles.infoLabel}>Account Tier</Text>
+                            <Text style={styles.infoValue}>{tierInfo.label}</Text>
+                        </View>
+                        {tierInfo.label === 'Free' ? (
+                            <TouchableOpacity onPress={() => setShowUpgradeModal(true)}>
+                                <View style={styles.upgradeButton}>
+                                    <Text style={styles.upgradeText}>Upgrade</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity onPress={() => setShowUpgradeModal(true)}>
+                                <View style={styles.manageButton}>
+                                    <Text style={styles.manageText}>Manage</Text>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+
+                    </View>
+
                     {profile?.website && (
                         <View style={styles.infoCard}>
                             <Ionicons name="globe-outline" size={24} color={Green} />
@@ -445,9 +517,7 @@ async function fetchUserStats(forceRefresh = false) {
                     </View>
                 </View>
 
-                {/* Action Buttons */}
                 <View style={styles.actionSection}>
-
                     <TouchableOpacity style={styles.editButton} onPress={handleEditProfile}>
                         <Ionicons name="create-outline" size={20} color={Green} />
                         <Text style={styles.editButtonText}>Edit Profile</Text>
@@ -464,7 +534,6 @@ async function fetchUserStats(forceRefresh = false) {
                     </TouchableOpacity>
                 </View>
 
-                {/* Footer spacing */}
                 <View style={styles.footer} />
             </ScrollView>
         </View>
@@ -476,8 +545,6 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: OffWhite,
     },
-    
-    // Profile Header Styles
     profileHeader: {
         backgroundColor: Green,
         paddingTop: 60,
@@ -496,12 +563,32 @@ const styles = StyleSheet.create({
         alignItems: "center",
         marginBottom: 16,
     },
+    nameContainer: {
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 8,
+    },
     userName: {
         color: "#fff",
         fontSize: 28,
         fontWeight: "bold",
-        marginBottom: 4,
     },
+    tierBadge: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
+    },
+    tierText: {
+        fontSize: 12,
+        fontWeight: "bold",
+        //textShadowColor: '#FFFFFF', 
+        //textShadowRadius: 2, 
+        //textShadowOffset: { width: 0, height: 0 }, 
+    }, 
     userEmail: {
         color: "#fff",
         fontSize: 16,
@@ -513,8 +600,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         opacity: 0.8,
     },
-
-    // Statistics Section
     statsContainer: {
         paddingHorizontal: 20,
         marginBottom: 30,
@@ -557,8 +642,6 @@ const styles = StyleSheet.create({
         textAlign: "center",
         fontWeight: "500",
     },
-
-    // Account Information Section
     accountSection: {
         paddingHorizontal: 20,
         marginBottom: 30,
@@ -591,8 +674,30 @@ const styles = StyleSheet.create({
         color: DarkGreen,
         fontWeight: "600",
     },
-
-    // Action Buttons Section
+    upgradeButton: {
+        backgroundColor: Green,
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderRadius: 12,
+    },
+    upgradeText: {
+        color: "#fff",
+        fontSize: 13,
+        fontWeight: "bold",
+    },
+    manageButton: {
+        backgroundColor: "#fff",
+        borderWidth: 2,
+        borderColor: Green,
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderRadius: 12,
+    },
+    manageText: {
+        color: Green,
+        fontSize: 13,
+        fontWeight: "bold",
+    },
     actionSection: {
         paddingHorizontal: 20,
         marginBottom: 20,
@@ -667,4 +772,60 @@ const styles = StyleSheet.create({
     footer: {
         height: 100,
     },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: "center",
+        alignItems: "center",
+    },
+    modalContainer: {
+        width: "80%",
+        backgroundColor: "#fff",
+        borderRadius: 16,
+        padding: 20,
+        alignItems: "center",
+        elevation: 5,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: "bold",
+        color: DarkGreen,
+        marginBottom: 10,
+    },
+    modalText: {
+        fontSize: 14,
+        color: "#555",
+        textAlign: "center",
+        marginBottom: 20,
+    },
+    modalButtons: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        width: "100%",
+    },
+    cancelButton: {
+        flex: 1,
+        marginRight: 8,
+        backgroundColor: "#E0E0E0",
+        paddingVertical: 10,
+        borderRadius: 10,
+        alignItems: "center",
+    },
+    confirmButton: {
+        flex: 1,
+        marginLeft: 8,
+        backgroundColor: Green,
+        paddingVertical: 10,
+        borderRadius: 10,
+        alignItems: "center",
+    },
+    cancelText: {
+        color: DarkGreen,
+        fontWeight: "600",
+    },
+    confirmText: {
+        color: "#fff",
+        fontWeight: "600",
+    },
+
 });
