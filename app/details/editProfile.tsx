@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Session } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StatusBar,
@@ -13,14 +15,12 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { eventEmitter, EVENTS } from "../../lib/eventEmitter";
 import { logger } from "../../lib/logger";
 import { profileCache } from "../../lib/profileCache";
 import { supabase } from "../../lib/supabase";
-import { SessionContext } from "./_layout";
 
 const Green = "#30BE63";
 const DarkGreen = "#021A1A";
@@ -34,8 +34,7 @@ interface ProfileForm {
 
 export default function EditProfile() {
   const router = useRouter();
-  const { session } = useContext(SessionContext);
-
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<ProfileForm>({
@@ -47,13 +46,53 @@ export default function EditProfile() {
   const [showSaveModal, setShowSaveModal] = useState(false);
 
   useEffect(() => {
-    if (session?.user) {
-      fetchProfile();
-    }
-  }, [session]);
+    // Get the session directly from Supabase
+    const checkSessionAndFetchProfile = async () => {
+      try {
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          throw error;
+        }
 
-  const fetchProfile = async () => {
-    if (!session?.user) return;
+        if (!currentSession?.user) {
+          Alert.alert(
+            "Authentication Required",
+            "Please sign in to edit your profile",
+            [
+              {
+                text: "OK",
+                onPress: () => router.replace("/auth"),
+              },
+            ]
+          );
+          setLoading(false);
+          return;
+        }
+
+        setSession(currentSession);
+        await fetchProfile(currentSession);
+      } catch (error) {
+        logger.error("Error checking session:", error);
+        Alert.alert(
+          "Error",
+          "Failed to verify authentication. Please try again.",
+          [
+            {
+              text: "OK",
+              onPress: () => router.back(),
+            },
+          ]
+        );
+        setLoading(false);
+      }
+    };
+
+    checkSessionAndFetchProfile();
+  }, []);
+
+  const fetchProfile = async (userSession: Session) => {
+    if (!userSession?.user) return;
 
     try {
       setLoading(true);
@@ -61,7 +100,7 @@ export default function EditProfile() {
       const { data, error } = await supabase
         .from("profiles")
         .select("first_name, last_name, website")
-        .eq("id", session.user.id)
+        .eq("id", userSession.user.id)
         .single();
 
       if (error && error.code !== "PGRST116") {
