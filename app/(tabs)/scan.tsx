@@ -139,7 +139,8 @@ function ScanScreen() {
   };
 
   /**
-   * Uploads an optimized/compressed image to Cloudinary and returns the URL.
+   * Uploads an optimized/compressed image to Cloudinary using signed upload.
+   * Requests signature from Supabase Edge Function for secure uploads.
    */
   const uploadToCloudinary = async (uri: string): Promise<string | null> => {
     if (!session?.user) {
@@ -155,28 +156,51 @@ function ScanScreen() {
     }
 
     try {
-      const cloudName = "cropguard";
-      const uploadPreset = "CropGuard";
+      console.log('🔐 Starting secure Cloudinary upload:', { uri });
       
-      console.log('Starting Cloudinary upload:', { uri, cloudName });
+      // Step 1: Get signed upload parameters from Edge Function
+      const { data: { session: authSession } } = await supabase.auth.getSession();
       
-      // Create FormData for Cloudinary upload
+      if (!authSession) {
+        throw new Error('No active session found');
+      }
+
+      console.log('📡 Requesting upload signature from Edge Function...');
+      
+      const { data: signatureData, error: signatureError } = await supabase.functions.invoke(
+        'generate-cloudinary-signature',
+        {
+          headers: {
+            Authorization: `Bearer ${authSession.access_token}`,
+          },
+        }
+      );
+
+      if (signatureError || !signatureData) {
+        throw new Error(`Failed to get upload signature: ${signatureError?.message || 'Unknown error'}`);
+      }
+
+      console.log('✅ Signature received:', {
+        cloudName: signatureData.cloudName,
+        timestamp: signatureData.timestamp,
+        folder: signatureData.folder,
+      });
+
+      // Step 2: Upload to Cloudinary with signature
       const formData = new FormData();
       formData.append('file', {
         uri: uri,
         type: 'image/jpeg',
         name: `scan_${Date.now()}.jpg`,
       } as any);
-      formData.append('upload_preset', uploadPreset);
-      formData.append('folder', `scans/${session.user.id}`);
+      formData.append('api_key', signatureData.apiKey);
+      formData.append('timestamp', signatureData.timestamp.toString());
+      formData.append('signature', signatureData.signature);
+      formData.append('folder', signatureData.folder);
+
+      console.log('⬆️ Uploading to Cloudinary with signed request...');
       
-      // Cloudinary transformation parameters for optimization
-      // These will compress and optimize the image automatically
-      formData.append('quality', 'auto:good'); // Auto quality optimization
-      formData.append('fetch_format', 'auto'); // Auto format selection (WebP, etc.)
-      
-      // Upload to Cloudinary
-      const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+      const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${signatureData.cloudName}/image/upload`;
       const response = await fetch(cloudinaryUrl, {
         method: 'POST',
         body: formData,
@@ -188,7 +212,7 @@ function ScanScreen() {
       }
       
       const data = await response.json();
-      console.log('Cloudinary upload successful:', { 
+      console.log('✅ Cloudinary upload successful:', { 
         url: data.secure_url,
         publicId: data.public_id,
         format: data.format,
@@ -199,7 +223,7 @@ function ScanScreen() {
       return data.secure_url;
 
     } catch (e) {
-      console.error("Cloudinary Upload Error:", e);
+      console.error("❌ Cloudinary Upload Error:", e);
       if (e instanceof Error) {
         Alert.alert(
           "Upload Error",
