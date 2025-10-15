@@ -12,7 +12,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { eventEmitter, EVENTS } from "../../lib/eventEmitter";
@@ -162,10 +162,37 @@ function UserHistoryScreen() {
     return date.toLocaleDateString("en-US", options);
   };
 
+  const formatDateOnly = (dateString: string) => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    };
+    return date.toLocaleDateString("en-US", options);
+  };
+
+  const formatTimeOnly = (dateString: string) => {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = {
+      hour: "2-digit",
+      minute: "2-digit",
+    };
+    return date.toLocaleTimeString("en-US", options);
+  };
+
+  const getAccuracyColor = (score: number) => {
+    const percentage = score * 100;
+    if (percentage < 70) return "#FF4444"; // Red - Low confidence
+    if (percentage < 85) return "#FF8C00"; // Orange - Medium confidence
+    return Green; // Green - High confidence
+  };
+
   const renderHistoryItem = ({ item }: { item: ScanHistory }) => {
     const diseaseName = item.disease_name;
     const accuracyPercent = (item.accuracy_score * 100).toFixed(1);
     const isHealthy = item.disease_name.toLowerCase().includes("healthy");
+    const accuracyColor = getAccuracyColor(item.accuracy_score);
 
     return (
       <TouchableOpacity
@@ -182,7 +209,7 @@ function UserHistoryScreen() {
           <View
             style={[
               styles.accuracyBadge,
-              { backgroundColor: isHealthy ? Green : "#FF8C00" },
+              { backgroundColor: accuracyColor },
             ]}
           >
             <Text style={styles.accuracyBadgeText}>{accuracyPercent}%</Text>
@@ -312,50 +339,99 @@ function UserHistoryScreen() {
                     style={styles.modalImage}
                     resizeMode="cover"
                   />
-                </View>
-
-                <View style={styles.modalDetails}>
-                  <View style={styles.modalHeader}>
+                  {/* Status Tag/Chip */}
+                  <View
+                    style={[
+                      styles.statusChip,
+                      {
+                        backgroundColor: selectedItem.disease_name.toLowerCase().includes("healthy")
+                          ? Green
+                          : "#FF8C00"
+                      }
+                    ]}
+                  >
                     <Ionicons
                       name={
                         selectedItem.disease_name.toLowerCase().includes("healthy")
                           ? "checkmark-circle"
                           : "alert-circle"
                       }
-                      size={32}
-                      color={
-                        selectedItem.disease_name.toLowerCase().includes("healthy")
-                          ? Green
-                          : "#FF8C00"
-                      }
+                      size={16}
+                      color="#fff"
                     />
+                    <Text style={styles.statusChipText}>
+                      {selectedItem.disease_name.toLowerCase().includes("healthy")
+                        ? "Healthy"
+                        : "Disease Detected"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalDetails}>
+                  {/* Disease Name Header */}
+                  <View style={styles.modalHeader}>
                     <Text style={styles.modalDiseaseName}>
                       {selectedItem.disease_name}
                     </Text>
                   </View>
 
-                  <View style={styles.modalInfoContainer}>
-                    <View style={styles.modalInfoRow}>
-                      <View style={styles.modalInfoItem}>
-                        <Ionicons name="analytics" size={20} color="#666" />
-                        <Text style={styles.modalInfoLabel}>Accuracy</Text>
-                        <Text style={styles.modalInfoValue}>
+                  {/* Info Cards Vertical Layout */}
+                  <View style={styles.infoCardsContainer}>
+                    {/* Accuracy Card */}
+                    <View style={[
+                      styles.infoCard, 
+                      styles.accuracyCard,
+                      { 
+                        borderColor: getAccuracyColor(selectedItem.accuracy_score),
+                        backgroundColor: getAccuracyColor(selectedItem.accuracy_score) + '15' // 15% opacity
+                      }
+                    ]}>
+                      <View style={styles.infoCardIcon}>
+                        <Ionicons 
+                          name="analytics" 
+                          size={28} 
+                          color={getAccuracyColor(selectedItem.accuracy_score)} 
+                        />
+                      </View>
+                      <View style={styles.infoCardContent}>
+                        <Text style={styles.infoCardLabel}>Accuracy</Text>
+                        <Text style={[
+                          styles.infoCardValue, 
+                          { color: getAccuracyColor(selectedItem.accuracy_score) }
+                        ]}>
                           {(selectedItem.accuracy_score * 100).toFixed(1)}%
                         </Text>
                       </View>
+                    </View>
 
-                      <View style={styles.modalInfoDivider} />
+                    {/* Date Card */}
+                    <View style={styles.infoCard}>
+                      <View style={styles.infoCardIcon}>
+                        <Ionicons name="calendar-outline" size={28} color="#666" />
+                      </View>
+                      <View style={styles.infoCardContent}>
+                        <Text style={styles.infoCardLabel}>Date</Text>
+                        <Text style={styles.infoCardValue}>
+                          {formatDateOnly(selectedItem.scanned_at)}
+                        </Text>
+                      </View>
+                    </View>
 
-                      <View style={styles.modalInfoItem}>
-                        <Ionicons name="calendar" size={20} color="#666" />
-                        <Text style={styles.modalInfoLabel}>Scanned On</Text>
-                        <Text style={styles.modalInfoValue}>
-                          {formatDate(selectedItem.scanned_at)}
+                    {/* Time Card */}
+                    <View style={styles.infoCard}>
+                      <View style={styles.infoCardIcon}>
+                        <Ionicons name="time-outline" size={28} color="#666" />
+                      </View>
+                      <View style={styles.infoCardContent}>
+                        <Text style={styles.infoCardLabel}>Time</Text>
+                        <Text style={styles.infoCardValue}>
+                          {formatTimeOnly(selectedItem.scanned_at)}
                         </Text>
                       </View>
                     </View>
                   </View>
 
+                  {/* Action Buttons */}
                   <View style={styles.modalButtonContainer}>
                     <TouchableOpacity
                       style={styles.deleteModalButton}
@@ -642,24 +718,81 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 300,
     backgroundColor: "#f8f8f8",
+    position: "relative",
   },
   modalImage: {
     width: "100%",
     height: "100%",
+  },
+  statusChip: {
+    position: "absolute",
+    top: 16,
+    left: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  statusChipText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "bold",
   },
   modalDetails: {
     padding: 24,
   },
   modalHeader: {
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 20,
   },
   modalDiseaseName: {
     fontSize: 22,
     fontWeight: "bold",
     color: DarkGreen,
-    marginTop: 12,
     textAlign: "center",
+  },
+  infoCardsContainer: {
+    marginBottom: 24,
+    gap: 12,
+  },
+  infoCard: {
+    width: "100%",
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#E9ECEF",
+  },
+  accuracyCard: {
+    // Dynamic colors applied inline based on accuracy score
+  },
+  infoCardIcon: {
+    marginRight: 16,
+  },
+  infoCardContent: {
+    flex: 1,
+  },
+  infoCardLabel: {
+    fontSize: 11,
+    color: "#999",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  infoCardValue: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: DarkGreen,
   },
   modalInfoContainer: {
     backgroundColor: OffWhite,
