@@ -50,7 +50,6 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigat
               'information',
               'splashscreen',
               'usermanual',
-              'editProfile',
             ].includes(route.name) || route.name.startsWith('details')
           ) {
             return null;
@@ -198,14 +197,6 @@ export default function TabsLayout() {
               name="account" 
               options={{ title: 'Account' }}
               // component prop removed to resolve TypeScript error
-          />
-
-          <Tabs.Screen
-            name="editProfile"
-            options={{
-              title: 'Edit Profile',
-              href: null // Hide from tab bar
-            }}
           />
 
         </Tabs>

@@ -4,11 +4,11 @@ import React, { useCallback, useContext, useEffect, useState } from "react";
 import { Alert, Dimensions, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supabase } from '../../lib/supabase';
 
+import { Modal } from 'react-native';
 import { eventEmitter, EVENTS } from '../../lib/eventEmitter';
 import { logger } from '../../lib/logger';
 import { profileCache } from '../../lib/profileCache';
 import { SessionContext } from './_layout';
-import { Modal } from 'react-native';
 
 const { width } = Dimensions.get("window");
 
@@ -296,7 +296,7 @@ export default function Account() {
     };
 
     const handleEditProfile = () => {
-        router.push("/editProfile");
+        router.push("/details/editProfile");
     };
 
     const handleSettings = () => {
