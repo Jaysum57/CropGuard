@@ -20,6 +20,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getRoutingInfo, mapPredictionToDiseaseId } from "../../lib/diseaseMapping";
 import { eventEmitter, EVENTS } from "../../lib/eventEmitter";
+import { profileCache } from "../../lib/profileCache";
 import { supabase } from "../../lib/supabase";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -40,20 +41,105 @@ function ScanScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [session, setSession] = useState<Session | null>(null);
+  const [upgradeModalVisible, setUpgradeModalVisible] = useState(false);
+  const [userTier, setUserTier] = useState<'free' | 'premium'>('free');
+  const [scanCount, setScanCount] = useState(0);
+  const FREE_TIER_LIMIT = 5;
 
   useEffect(() => {
     // Check for an existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session?.user) {
+        loadUserTierAndScanCount(session.user.id);
+      }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session?.user) {
+        loadUserTierAndScanCount(session.user.id);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  /**
+   * Load user tier from cache or database and get scan count
+   */
+  const loadUserTierAndScanCount = async (userId: string, forceRefresh = false) => {
+    try {
+      // Try to get tier from cache first
+      let tier = profileCache.getUserTier(userId);
+
+      // If not in cache or force refresh, fetch from database
+      if (!tier || forceRefresh) {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('tier')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('Error fetching user tier:', error);
+          tier = 'free'; // Default to free on error
+        } else {
+          tier = (profile?.tier as 'free' | 'premium') || 'free';
+          
+          // Update cache
+          const cachedProfile = profileCache.getProfile(userId);
+          if (cachedProfile) {
+            profileCache.setProfile(userId, { ...cachedProfile, tier });
+          } else {
+            profileCache.setProfile(userId, {
+              first_name: null,
+              last_name: null,
+              username: null,
+              website: null,
+              avatar_url: null,
+              tier,
+            });
+          }
+        }
+      }
+
+      setUserTier(tier);
+
+      // Get scan count
+      const { count, error: countError } = await supabase
+        .from('scan_activity')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+
+      if (!countError && count !== null) {
+        setScanCount(count);
+      }
+    } catch (error) {
+      console.error('Error loading user tier and scan count:', error);
+      setUserTier('free');
+    }
+  };
+
+  /**
+   * Check if user can perform a scan based on tier and scan count
+   */
+  const canUserScan = (): boolean => {
+    if (userTier === 'premium') {
+      return true; // Premium users have unlimited scans
+    }
+
+    // Free users are limited to FREE_TIER_LIMIT scans
+    return scanCount < FREE_TIER_LIMIT;
+  };
+
+  /**
+   * Show upgrade modal when free user hits limit
+   */
+  const showUpgradeModal = () => {
+    setUpgradeModalVisible(true);
+  };
 
   const cameraRef = useRef<any>(null);
 
@@ -120,6 +206,10 @@ function ScanScreen() {
         }
       } else {
         console.log("✅ [LOGGING] Scan logged successfully with both disease_id and disease_name");
+        
+        // Update scan count immediately
+        setScanCount(prev => prev + 1);
+        
         // Emit event to notify other screens to refresh their stats
         eventEmitter.emit(EVENTS.SCAN_COMPLETED, {
           diseaseId,
@@ -127,6 +217,11 @@ function ScanScreen() {
           accuracyScore,
           timestamp: new Date().toISOString(),
         });
+
+        // Reload user tier and scan count to ensure cache is fresh
+        if (session?.user) {
+          await loadUserTierAndScanCount(session.user.id, false);
+        }
       }
     } catch (e) {
       console.error("Exception during logging:", e);
@@ -238,6 +333,12 @@ function ScanScreen() {
   // --- HANDLERS (UPDATED) ---
 
   const handlePickImage = async () => {
+    // Check if user can scan
+    if (!canUserScan()) {
+      showUpgradeModal();
+      return;
+    }
+
     setLoading(true);
     let assetUri: string | null = null;
 
@@ -348,6 +449,13 @@ function ScanScreen() {
   };
   
   const handleTakePicture = async () => {
+    // Check if user can scan
+    if (!canUserScan()) {
+      handleCloseCamera();
+      setTimeout(() => showUpgradeModal(), 300);
+      return;
+    }
+
     if (cameraRef.current) {
       setLoading(true);
       let photoUriFromCamera: string | null = null;
@@ -479,6 +587,12 @@ function ScanScreen() {
   };
 
   const handleStartCamera = () => {
+    // Check if user can scan
+    if (!canUserScan()) {
+      showUpgradeModal();
+      return;
+    }
+
     setCameraOpen(true);
   };
 
@@ -1016,6 +1130,118 @@ function ScanScreen() {
                 <Text style={styles.fallbackText}>{JSON.stringify(result, null, 2)}</Text>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Upgrade to Premium Modal */}
+      <Modal visible={upgradeModalVisible} transparent animationType="slide">
+        <View style={styles.upgradeModalOverlay}>
+          <View style={styles.upgradeModalContainer}>
+            <TouchableOpacity
+              style={styles.upgradeCloseButton}
+              onPress={() => setUpgradeModalVisible(false)}
+            >
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.upgradeModalScrollContent}
+            >
+              <View style={styles.upgradeIconContainer}>
+                <Ionicons name="star" size={48} color="#FFD700" />
+              </View>
+
+              <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
+              <Text style={styles.upgradeSubtitle}>
+                You've reached your free tier limit of {FREE_TIER_LIMIT} scans
+              </Text>
+
+              <View style={styles.upgradeScanCount}>
+                <View style={styles.scanCountCircle}>
+                  <Text style={styles.scanCountNumber}>{scanCount}</Text>
+                  <Text style={styles.scanCountLabel}>/ {FREE_TIER_LIMIT}</Text>
+                </View>
+                <Text style={styles.scanCountText}>Scans Used</Text>
+              </View>
+
+              <View style={styles.premiumFeatures}>
+                <Text style={styles.premiumFeaturesTitle}>Premium Benefits</Text>
+                
+                <View style={styles.featureItem}>
+                  <View style={styles.featureIconContainer}>
+                    <Ionicons name="infinite" size={24} color={Green} />
+                  </View>
+                  <View style={styles.featureContent}>
+                    <Text style={styles.featureTitle}>Unlimited Scans</Text>
+                    <Text style={styles.featureDescription}>
+                      Scan as many plants as you need, no limits
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.featureItem}>
+                  <View style={styles.featureIconContainer}>
+                    <Ionicons name="flash" size={24} color={Green} />
+                  </View>
+                  <View style={styles.featureContent}>
+                    <Text style={styles.featureTitle}>Priority Processing</Text>
+                    <Text style={styles.featureDescription}>
+                      Faster scan results and priority support
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.featureItem}>
+                  <View style={styles.featureIconContainer}>
+                    <Ionicons name="analytics" size={24} color={Green} />
+                  </View>
+                  <View style={styles.featureContent}>
+                    <Text style={styles.featureTitle}>Advanced Analytics</Text>
+                    <Text style={styles.featureDescription}>
+                      Detailed insights and scan history tracking
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.featureItem}>
+                  <View style={styles.featureIconContainer}>
+                    <Ionicons name="bookmark" size={24} color={Green} />
+                  </View>
+                  <View style={styles.featureContent}>
+                    <Text style={styles.featureTitle}>Save Favorites</Text>
+                    <Text style={styles.featureDescription}>
+                      Bookmark and organize your scan results
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.upgradeButtonContainer}>
+                <TouchableOpacity
+                  style={styles.upgradePremiumButton}
+                  onPress={() => {
+                    // TODO: Implement upgrade flow (e.g., navigate to payment screen)
+                    Alert.alert(
+                      "Coming Soon",
+                      "Premium upgrade functionality will be available soon!",
+                      [{ text: "OK" }]
+                    );
+                  }}
+                >
+                  <Ionicons name="star" size={20} color="#fff" />
+                  <Text style={styles.upgradePremiumButtonText}>Upgrade to Premium</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.upgradeLaterButton}
+                  onPress={() => setUpgradeModalVisible(false)}
+                >
+                  <Text style={styles.upgradeLaterButtonText}>Maybe Later</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -2041,5 +2267,170 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#999",
     fontWeight: "500",
+  },
+
+  // Upgrade Modal Styles
+  upgradeModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+  },
+  upgradeModalContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    maxWidth: 400,
+    width: "100%",
+    maxHeight: "85%",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    overflow: "hidden",
+  },
+  upgradeModalScrollContent: {
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+  },
+  upgradeCloseButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F5F5F5",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  upgradeIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#FFF9E6",
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  upgradeTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: DarkGreen,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  upgradeSubtitle: {
+    fontSize: 15,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  upgradeScanCount: {
+    alignItems: "center",
+    marginBottom: 24,
+    paddingVertical: 20,
+    backgroundColor: "#F8F9FA",
+    borderRadius: 16,
+  },
+  scanCountCircle: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginBottom: 8,
+  },
+  scanCountNumber: {
+    fontSize: 48,
+    fontWeight: "bold",
+    color: "#FF6B6B",
+  },
+  scanCountLabel: {
+    fontSize: 24,
+    fontWeight: "600",
+    color: "#999",
+    marginLeft: 4,
+  },
+  scanCountText: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "600",
+  },
+  premiumFeatures: {
+    marginBottom: 24,
+  },
+  premiumFeaturesTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: DarkGreen,
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  featureIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F0FFF4",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  featureContent: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: DarkGreen,
+    marginBottom: 2,
+  },
+  featureDescription: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 20,
+  },
+  upgradeButtonContainer: {
+    gap: 12,
+    marginTop: 8,
+  },
+  upgradePremiumButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Green,
+    paddingVertical: 16,
+    borderRadius: 20,
+    gap: 8,
+    elevation: 3,
+    shadowColor: Green,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  upgradePremiumButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  upgradeLaterButton: {
+    paddingVertical: 14,
+    borderRadius: 20,
+    backgroundColor: "#F5F5F5",
+    alignItems: "center",
+  },
+  upgradeLaterButtonText: {
+    color: "#666",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

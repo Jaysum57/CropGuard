@@ -18,6 +18,7 @@ interface Profile {
   username: string | null;
   website: string | null;
   avatar_url: string | null;
+  tier: 'free' | 'premium' | null;
 }
 
 interface UserStats {
@@ -243,6 +244,25 @@ class ProfileCache {
       size: this.cache.size,
       entries: Array.from(this.cache.keys()),
     };
+  }
+
+  /**
+   * Get user tier from cache (free or premium)
+   */
+  getUserTier(userId: string): 'free' | 'premium' | null {
+    const profile = this.getProfile(userId);
+    return profile?.tier || 'free'; // Default to 'free' if not set
+  }
+
+  /**
+   * Set user tier in cache
+   */
+  setUserTier(userId: string, tier: 'free' | 'premium'): void {
+    const profile = this.getProfile(userId);
+    if (profile) {
+      profile.tier = tier;
+      this.setProfile(userId, profile);
+    }
   }
 }
 
