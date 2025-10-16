@@ -11,6 +11,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Modal,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getAllDiseases } from "../../components/DiseaseData";
@@ -27,6 +30,7 @@ const Yellow = "#FFD94D";
 const OffWhite = "#F6F6F6";
 const DarkGreen = "#021A1A";
 
+
 // Define the structure for the profile data we will fetch
 interface Profile {
   first_name: string | null;
@@ -34,7 +38,7 @@ interface Profile {
   username: string | null;
   website: string | null;
   avatar_url: string | null;
-  tier: string | null; // Add this property
+  tier: string | null;
 }
 
 // Define the structure for fetched statistics of disease data
@@ -54,9 +58,9 @@ interface Disease {
 }
 
 const severityColors: Record<Disease['severity'], string> = {
-  Low: "#38A169",    // Green
-  Medium: "#FF8C00", // Orange
-  High: "#E53E3E",   // Red
+  Low: "#38A169",
+  Medium: "#FF8C00",
+  High: "#E53E3E",
 };
 
 const quickActions = [
@@ -66,6 +70,7 @@ const quickActions = [
     icon: "camera" as const,
     color: Green,
     route: "/scan" as const,
+    premium: false,
   },
   {
     title: "Disease Library",
@@ -73,6 +78,15 @@ const quickActions = [
     icon: "library" as const,
     color: "#8B5CF6",
     route: "/details/diseaseLibrary" as const,
+    premium: false,
+  },
+  {
+    title: "Local Experts",
+    description: "Connect with agricultural experts",
+    icon: "people" as const,
+    color: "#F59E0B", // OG color: "#3B82F6"
+    route: "/details/localExperts" as const,
+    premium: true,
   },
 ];
 
@@ -96,18 +110,14 @@ function formatLastScanTime(timestamp: string | undefined): { relativeTime: stri
     let relativeTime: string;
 
     if (diffInSeconds < 60) {
-        // Less than 1 minute
         relativeTime = "Just now";
     } else if (diffInSeconds < 3600) {
-        // Less than 1 hour (minutes)
         const minutes = Math.floor(diffInSeconds / 60);
         relativeTime = `${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`;
     } else if (diffInSeconds < 86400) {
-        // Less than 24 hours (hours)
         const hours = Math.floor(diffInSeconds / 3600);
         relativeTime = `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
     } else {
-        // 24 hours or more (days)
         const days = Math.floor(diffInSeconds / 86400);
         relativeTime = `${days} ${days === 1 ? 'day' : 'days'} ago`;
     }
@@ -129,6 +139,9 @@ export default function Index() {
   });
   const [diseases, setDiseases] = useState<Disease[]>([]);
   const [lastScanUpdateTrigger, setLastScanUpdateTrigger] = useState(0);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isUpgrading, setIsUpgrading] = useState(false);
 
   /**
    * REFACTORED: Function to fetch aggregate scan statistics (Count & Last Scan Time)
@@ -147,7 +160,7 @@ export default function Index() {
           plantsScanned: cachedStats.plantsScanned,
           lastScan: cachedStats.lastScan || null,
         });
-        return; // Use cached data
+        return;
       }
     }
 
@@ -157,7 +170,7 @@ export default function Index() {
       // 1. Get the total count of scans
       const { count, error: countError } = await supabase
         .from('scan_activity')
-        .select('*', { head: true, count: 'exact' }) // Use head: true for count
+        .select('*', { head: true, count: 'exact' })
         .eq('user_id', userId);
 
       if (countError) {
@@ -170,16 +183,14 @@ export default function Index() {
 
       // 2. Get the last scan time (max timestamp) if there are any scans
       if (plantsScanned > 0) {
-        // Fetch the single latest scan time
         const { data: latestData, error: latestError } = await supabase
           .from('scan_activity')
           .select('scanned_at')
           .eq('user_id', userId)
           .order('scanned_at', { ascending: false })
           .limit(1)
-          .single(); // Since we use limit(1), single() is appropriate
+          .single();
 
-        // Handle error, but skip the "No rows found" error (PGRST116) as it's unexpected here
         if (latestError && latestError.code !== 'PGRST116') {
           logger.error("Error fetching last scan time:", latestError.message);
         } else if (latestData && latestData.scanned_at) {
@@ -195,10 +206,10 @@ export default function Index() {
       // Cache the stats with the lastScan timestamp
       profileCache.setStats(userId, {
         plantsScanned,
-        diseasesDetected: 0, // Not used in index
-        healthyScans: 0, // Not used in index
-        accuracy: '0%', // Not used in index
-        lastScan: lastScanTime, // Now properly cached!
+        diseasesDetected: 0,
+        healthyScans: 0,
+        accuracy: '0%',
+        lastScan: lastScanTime,
       });
 
       logger.success('Scan stats fetched and cached successfully');
@@ -226,7 +237,6 @@ export default function Index() {
       if (!forceRefresh) {
           const cachedProfile = profileCache.getProfile(session.user.id);
           if (cachedProfile) {
-              // Map the cached profile to our simplified Profile interface
               setProfile({
                   first_name: cachedProfile.first_name,
                   last_name: cachedProfile.last_name,
@@ -244,9 +254,9 @@ export default function Index() {
       try {
           const { data, error } = await supabase
               .from('profiles')
-              .select(`first_name, username`) 
+              .select(`first_name, username, tier`) 
               .eq('id', session.user.id)
-              .single(); // Use single() since 'id' is a primary key
+              .single();
 
           if (error) {
               logger.error("Error fetching profile for index:", error.message);
@@ -254,18 +264,16 @@ export default function Index() {
               return;
           }
 
-          // data will be the object if single() succeeds, or null if not found
           if (data) {
               const profileData = data as Profile;
               setProfile(profileData);
               
-              // Cache the profile data (with the full structure expected by profileCache)
               profileCache.setProfile(session.user.id, {
                   first_name: profileData.first_name,
-                  last_name: null, // Not fetched in index
+                  last_name: null,
                   username: profileData.username,
-                  website: null, // Not fetched in index
-                  avatar_url: null, // Not fetched in index
+                  website: null,
+                  avatar_url: null,
                   tier: profileData.tier as "free" | "premium" | null,
               });
           } else {
@@ -283,15 +291,13 @@ export default function Index() {
 
   // 5. Load profile data when the session changes
   useEffect(() => {
-      // Only try to fetch if the session is not null
       if (session) {
           getProfile();
-          getScanStats(session.user.id); // Fetch stats for the logged-in user
+          getScanStats(session.user.id);
       } else {
-          // If session is null (logged out), clear profile
           setProfile(null);
           setLoadingProfile(false);
-          setStats({ plantsScanned: 0, lastScan: "Never" }); // Reset stats
+          setStats({ plantsScanned: 0, lastScan: "Never" });
       }
   }, [session]);
 
@@ -324,7 +330,6 @@ export default function Index() {
     const handleScanCompleted = () => {
       logger.log('Index: Scan completed event received, refreshing stats...');
       if (session?.user) {
-        // Invalidate stats cache and fetch fresh data
         profileCache.invalidateStats(session.user.id);
         getScanStats(session.user.id, true);
       }
@@ -342,7 +347,6 @@ export default function Index() {
     const handleProfileUpdated = () => {
       logger.log('Index: Profile updated event received, refreshing profile...');
       if (session?.user) {
-        // Invalidate profile cache and fetch fresh data
         profileCache.invalidateProfile(session.user.id);
         getProfile(true);
       }
@@ -357,10 +361,9 @@ export default function Index() {
 
   // Set up 1-minute timer to update "Last Scan" display
   useEffect(() => {
-    // Update every 60 seconds to refresh relative time
     const intervalId = setInterval(() => {
       setLastScanUpdateTrigger(prev => prev + 1);
-    }, 60000); // 60 seconds
+    }, 60000);
 
     return () => clearInterval(intervalId);
   }, []);
@@ -369,9 +372,63 @@ export default function Index() {
   const userName = 
     profile?.first_name || 
     profile?.username || 
-    session?.user.email?.split('@')[0] || // Use part of the email as a robust fallback
+    session?.user.email?.split('@')[0] ||
     (isSessionLoading || loadingProfile ? "Loading..." : "New User");
 
+  // Check if user has premium access
+  const isPremium = profile?.tier === "premium";
+
+  // Handle quick action press
+  const handleQuickActionPress = (action: typeof quickActions[0]) => {
+    if (action.premium && !isPremium) {
+      setShowUpgradeModal(true);
+    } else {
+      router.push(action.route);
+    }
+  };
+
+  // Handle user upgrade to premium
+  const handleUpgrade = async () => {
+    if (!session?.user) return;
+
+    try {
+      logger.log("Upgrading user to premium...");
+
+      const actionText = 'upgraded';
+      const { error } = await supabase
+        .from("profiles")
+        .update({ tier: "premium" })
+        .eq("id", session.user.id);
+
+      if (error) {
+        logger.error("Error upgrading to premium:", error.message);
+        return;
+      }
+
+      // Immediately update local state for instant UI feedback
+      setProfile((prev) => (prev ? { ...prev, tier: "premium" } : prev));
+
+      // Invalidate cache to force next fetch to be fresh
+      profileCache.invalidateProfile(session.user.id);
+
+      // Fetch a fresh profile one time (safe)
+      await getProfile(true);
+
+      // Notify other screens so they also refresh once
+      eventEmitter.emit(EVENTS.PROFILE_UPDATED);
+
+      // Close modals
+      setShowUpgradeModal(false);
+      setShowConfirmModal(false);
+
+      Alert.alert("Success", "Your account has been " + actionText + ".");
+      logger.success("✅ Successfully upgraded to premium!");
+    } catch (error) {
+      if (error instanceof Error) {
+        logger.error("Error in handleUpgrade:", error.message);
+      }
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top', 'left', 'right']}>
@@ -383,7 +440,6 @@ export default function Index() {
           <View style={styles.headerContent}>
             <View>
               <Text style={styles.welcomeText}>Welcome back,</Text>
-              {/* 7. Use the dynamic userName */}
               <Text style={styles.userNameText}>{userName}! 👋</Text>
             </View>
             <TouchableOpacity style={styles.profileButton} onPress={() => router.push("/account")}>
@@ -429,23 +485,42 @@ export default function Index() {
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionGrid}>
-            {quickActions.map((action, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[styles.actionCard, { borderLeftColor: action.color }]}
-                onPress={() => router.push(action.route)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: action.color }]}>
-                  <Ionicons name={action.icon} size={24} color="#fff" />
-                </View>
-                <View style={styles.actionContent}>
-                  <Text style={styles.actionTitle}>{action.title}</Text>
-                  <Text style={styles.actionDescription}>{action.description}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#999" />
-              </TouchableOpacity>
-            ))}
+            {quickActions.map((action, index) => {
+              const isLocked = action.premium && !isPremium;
+              
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.actionCard, 
+                    { borderLeftColor: action.color },
+                    isLocked && styles.actionCardLocked
+                  ]}
+                  onPress={() => handleQuickActionPress(action)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.actionIcon, { backgroundColor: action.color }]}>
+                    <Ionicons name={action.icon} size={24} color="#fff" />
+                  </View>
+                  <View style={styles.actionContent}>
+                    <View style={styles.actionTitleContainer}>
+                      <Text style={styles.actionTitle}>{action.title}</Text>
+                      {isLocked && (
+                        <View style={styles.premiumBadge}>
+                          <Text style={styles.premiumBadgeText}>PRO</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.actionDescription}>{action.description}</Text>
+                  </View>
+                  <Ionicons 
+                    name={isLocked ? "lock-closed" : "chevron-forward"} 
+                    size={20} 
+                    color={isLocked ? "#FFD700" : "#999"} 
+                  />
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -520,6 +595,129 @@ export default function Index() {
         {/* Bottom Spacing */}
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      {/* Upgrade Modal */}
+      <Modal
+        visible={showUpgradeModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowUpgradeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconContainer}>
+                <Ionicons name="star" size={40} color="#FFD700" />
+              </View>
+              <Text style={styles.modalTitle}>Upgrade to Premium</Text>
+              <Text style={styles.modalSubtitle}>
+                Unlock access to Local Experts and connect with agricultural professionals
+              </Text>
+            </View>
+
+            <View style={styles.featuresList}>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={Green} />
+                <Text style={styles.featureText}>Connect with verified experts</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={Green} />
+                <Text style={styles.featureText}>Get personalized advice</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={Green} />
+                <Text style={styles.featureText}>Priority support</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={24} color={Green} />
+                <Text style={styles.featureText}>Unlimited expert consultations</Text>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.upgradeButton}
+                onPress={() => {
+                  setShowUpgradeModal(false); // hide upgrade modal first
+                  setTimeout(() => setShowConfirmModal(true), 250); // small delay for smoother transition
+                }}
+
+                activeOpacity={0.8}
+              >
+                <Text style={styles.upgradeButtonText}>Upgrade Now</Text>
+                <Ionicons name="arrow-forward" size={20} color="#fff" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowUpgradeModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelButtonText}>Maybe Later</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={showConfirmModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="alert-circle" size={50} color={Green} style={{ marginBottom: 16 }} />
+              <Text style={styles.modalTitle}>Confirm Upgrade</Text>
+              <Text style={styles.modalSubtitle}>
+                Are you sure you want to upgrade to Premium? This will unlock access to all expert features.
+              </Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.upgradeButton, isUpgrading && { opacity: 0.8 }]}
+                onPress={async () => {
+                  setIsUpgrading(true);
+                  await handleUpgrade();
+                  setIsUpgrading(false);
+                  setShowConfirmModal(false);
+                }}
+                activeOpacity={0.8}
+                disabled={isUpgrading}
+              >
+                {isUpgrading ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={[styles.upgradeButtonText, { marginLeft: 8 }]}>Upgrading...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.upgradeButtonText}>Yes, Upgrade</Text>
+                    <Ionicons name="checkmark" size={20} color="#fff" />
+                  </>
+                )}
+                
+              </TouchableOpacity>
+
+              {!isUpgrading && (
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setShowConfirmModal(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+
     </SafeAreaView>
   );
 }
@@ -564,8 +762,6 @@ const styles = StyleSheet.create({
   statsCard: {
     flexDirection: "row",
     backgroundColor: OffWhite,
-    // borderColor: "#E0E0E0",
-    // borderWidth: 1,
     borderRadius: 16,
     padding: 20,
     alignItems: "center",
@@ -676,6 +872,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
   },
+  actionCardLocked: {
+    opacity: 0.7,
+  },
   actionIcon: {
     width: 48,
     height: 48,
@@ -687,11 +886,27 @@ const styles = StyleSheet.create({
   actionContent: {
     flex: 1,
   },
+  actionTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
   actionTitle: {
     fontSize: 16,
     fontWeight: "bold",
     color: DarkGreen,
-    marginBottom: 4,
+    marginRight: 8,
+  },
+  premiumBadge: {
+    backgroundColor: "#FFD700",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  premiumBadgeText: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: "#000",
   },
   actionDescription: {
     fontSize: 13,
@@ -836,5 +1051,94 @@ const styles = StyleSheet.create({
 
   bottomSpacing: {
     height: 0,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#FFF9E6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: DarkGreen,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  featuresList: {
+    marginBottom: 24,
+    gap: 12,
+  },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  featureText: {
+    fontSize: 15,
+    color: DarkGreen,
+    flex: 1,
+  },
+  modalActions: {
+    gap: 12,
+  },
+  upgradeButton: {
+    backgroundColor: Green,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  upgradeButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  cancelButton: {
+    backgroundColor: OffWhite,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#666",
   },
 });
